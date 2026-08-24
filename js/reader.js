@@ -31,14 +31,31 @@ function withTimeout(promise, ms, message) {
   ]);
 }
 
+// Why a file would not open, in words worth showing someone. A reader that
+// says "could not be opened" for a DRM-locked file invites you to go looking
+// for a bug that is not there.
+export function describeFileError(err, filename) {
+  const name = err?.name || '';
+  const message = String(err?.message || '');
+
+  if (name === 'PasswordException' || /password/i.test(message)) {
+    return `${filename} is password-protected, so it cannot be opened.`;
+  }
+  if (/encryption|encrypted|drm/i.test(message)) {
+    return `${filename} is locked by its publisher (DRM). No reader but the publisher's own can open it.`;
+  }
+  if (/invalid|corrupt|xref|structure|not a|zip/i.test(message)) {
+    return `${filename} looks damaged, so it cannot be read.`;
+  }
+  return `${filename} could not be opened.`;
+}
+
+// Anything thrown here means the file itself will not open, and the caller
+// should refuse it rather than shelve a book that can never be read. Missing
+// titles and covers are handled inside the engines and never throw.
 export async function readMetadata(format, bytes, filename) {
   const engine = await engineFor(format);
-  let meta = { title: null, author: null, cover: null };
-  try {
-    meta = await engine.metadata(bytes);
-  } catch (err) {
-    console.warn('could not read metadata', err);
-  }
+  const meta = await engine.metadata(bytes);
   return {
     title: meta.title || filename.replace(/\.(epub|pdf)$/i, ''),
     author: meta.author || 'Unknown author',

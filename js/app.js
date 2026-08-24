@@ -1,7 +1,7 @@
 // Library screen, importing, and the reader's chrome.
 
 import { db, fingerprint, usage } from './db.js';
-import { openBook, readMetadata, detectFormat } from './reader.js';
+import { openBook, readMetadata, detectFormat, describeFileError } from './reader.js';
 import { loadSettings, saveSettings, HIGHLIGHT_COLORS, THEMES } from './settings.js';
 
 const $ = (sel) => document.querySelector(sel);
@@ -142,8 +142,10 @@ async function importFiles(fileList) {
       });
       status(`Added ${meta.title}.`);
     } catch (err) {
+      // Nothing is stored: a book that cannot be opened has no business on the
+      // shelf, where it would sit as an entry that fails every time it is tapped.
       console.error(err);
-      status(`Could not read ${file.name} — the file may be damaged or protected.`);
+      status(describeFileError(err, file.name));
     }
   }
   renderLibrary();
@@ -214,7 +216,9 @@ async function openById(id) {
     renderMarks(session.highlights());
   } catch (err) {
     console.error(err);
-    status(err?.message?.includes('too long') ? err.message : 'That book could not be opened.');
+    status(err?.message?.includes('too long')
+      ? err.message
+      : describeFileError(err, record.title));
     closeBook();
   }
 }

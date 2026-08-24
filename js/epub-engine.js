@@ -461,8 +461,10 @@ export async function open(record, container, hooks) {
 
 export async function metadata(bytes) {
   const book = ePub(bytes);
-  await book.ready;
-  const meta = await book.loaded.metadata;
+  await book.ready;   // the gate: throws when this is not a readable epub
+
+  let meta = {};
+  try { meta = await book.loaded.metadata; } catch { /* an odd OPF, not a dealbreaker */ }
 
   let cover = null;
   try {

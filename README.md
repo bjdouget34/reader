@@ -131,8 +131,14 @@ A few starting points, roughly easiest first:
 
 ## Known edges
 
-- DRM-protected files will not open. Nothing here can change that. Books from
-  Kindle, Apple Books and Google Play are encrypted and locked to those apps.
+- DRM-protected files will not open, and are now refused at import with the
+  reason rather than shelved as an entry that fails whenever it is tapped.
+  Books from Kindle, Apple Books and Google Play are locked to those apps, and
+  so are many standards documents -- ASTM's, for one, use an encryption handler
+  no general reader implements.
+- PDF bookmarks are the document outline, which is what Contents reads. Links
+  inside a PDF -- to another page or to a website -- are annotations rather than
+  markup, and are not wired up yet.
 - Highlighting is EPUB-only. A PDF has no text to mark up -- only coordinates --
   so highlights there mean drawing boxes, which is a separate job. The
   Highlights button is disabled while a PDF is open.
