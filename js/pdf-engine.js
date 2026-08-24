@@ -254,6 +254,8 @@ export async function open(record, container, hooks) {
       return { total: found, capped: found >= cap };
     },
 
+    relayout() { render().catch(() => {}); },
+
     next: () => show(page + 1),
     prev: () => show(page - 1),
 

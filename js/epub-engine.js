@@ -396,6 +396,10 @@ export async function open(record, container, hooks) {
     back: goBack,
     openTarget: goTarget,
 
+    // Belt and braces beside the ResizeObserver: something that changes the
+    // size of the reading area can say so outright.
+    relayout() { try { rendition.resize(); } catch { /* mid-teardown */ } },
+
     // Walk the spine a section at a time. Each section has to be parsed to be
     // searched, so results are reported in batches as they arrive rather than
     // all at the end -- on a 109-section novel the difference is obvious.

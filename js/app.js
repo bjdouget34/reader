@@ -532,6 +532,15 @@ function applyChrome() {
 function setChromeHidden(hidden) {
   saveSettings({ chromeHidden: hidden });
   applyChrome();
+
+  // Collapsing the toolbar changes the height of the reading area without the
+  // window resizing. The engines watch their own box for exactly this, but tell
+  // them outright as well -- it is one call, and it does not depend on the
+  // observer firing when this particular device happens to reflow.
+  requestAnimationFrame(() => {
+    session?.relayout?.();
+    setTimeout(() => session?.relayout?.(), 250);
+  });
 }
 
 function mb(bytes) {
