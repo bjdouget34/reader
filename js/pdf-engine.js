@@ -129,7 +129,12 @@ export async function open(record, container, hooks) {
 
     await renderTextLayer(pdfPage, cssViewport);
     pdfPage.cleanup();
+
+    // Back to the top left of the new page. Leaving scrollLeft where it was
+    // meant a zoomed-in reader turned the page and stayed panned sideways,
+    // which reads as a gap down one edge.
     stage.scrollTop = 0;
+    stage.scrollLeft = 0;
     report();
   }
 

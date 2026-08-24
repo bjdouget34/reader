@@ -150,6 +150,8 @@ A few starting points, roughly easiest first:
   book, so a broad term on a 450-page PDF takes a second or two.
 - Very large PDFs render a page at a time, so page turns on a slow tablet are
   not instant. `MAX_CANVAS_PIXELS` in `js/pdf-engine.js` caps memory use.
+- Zooming a PDF past fit-to-width means panning sideways to read, which is the
+  nature of a fixed page. Each page turn returns you to the left edge.
 - A PDF with no outline shows no contents button. That is the file, not a bug.
 - Twice during development a book failed to open on the first try and hung on a
   blank page, in a browser that was also failing at unrelated things. It did not
