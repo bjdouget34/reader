@@ -26,9 +26,19 @@ library. The `node_modules` directory here exists solely to re-vendor pdf.js
 - Remembers your place. For EPUB that is a CFI, an exact pointer into the text
   that survives font-size changes. For PDF it is the page number.
 - Library with covers and progress, most recently read first.
-- Light, sepia, and dark themes. PDFs are theme-shifted with a CSS filter.
+- Six colour themes, picked from a dropdown in the toolbar: light, sepia,
+  dark, amber on black, green on black, and high contrast. PDFs cannot be
+  recoloured properly, only filtered, so their themes are approximations.
 - Text size for EPUB, zoom for PDF. Both remembered.
 - Table of contents where the book has one.
+- **Footnotes in place.** Tap a footnote marker and the note appears at the
+  foot of the page instead of throwing you to the back of the book. A long
+  note is trimmed with a *Read in full* button that opens it as a page.
+- **A way back.** Following any link out of the text -- an endnote asterisk,
+  say -- offers a back button that returns you to the exact spot you left.
+- **A toolbar that gets out of the way.** Collapse it once your settings are
+  how you want them; a small chevron at the top edge brings it back. The
+  choice is remembered.
 - **Selectable PDF text.** pdf.js draws an invisible text layer over the page
   image, aligned to the pixel, so you can select and copy. Scanned PDFs have no
   text in them, so there is nothing to select on those.
@@ -84,6 +94,7 @@ If registration fails, the console message says why.
 | `js/epub-engine.js` | EPUB, via epub.js |
 | `js/pdf-engine.js` | PDF, via pdf.js |
 | `js/settings.js` | Theme and size preferences, palettes, highlight colours |
+| | Adding a theme means one entry in `THEMES` plus one `body[data-theme=…]` block in `css/app.css`. The picker builds itself from the first. |
 | `sw.js` | Offline cache |
 | `serve.js` | The local server |
 | `tools/make-icons.js` | Regenerates the app icons |
@@ -105,6 +116,9 @@ A few starting points, roughly easiest first:
   `lastRead`; open the newest one at the end of `js/app.js`.
 - **A note attached to a highlight.** The record already carries a `text` field
   per highlight; add a `note` beside it and a textarea in the toolbar.
+- **Footnotes for PDFs.** A PDF's links are annotations rather than markup, so
+  this needs `page.getAnnotations()` rather than the DOM walk the epub engine
+  does.
 - **Export your highlights.** They are plain objects in IndexedDB, so this is a
   loop and a `Blob` download.
 - **Cache the extracted text per book** so repeat searches are instant. Search
@@ -140,3 +154,11 @@ A few starting points, roughly easiest first:
   `tools/make-icons.js`.
 - Press-and-hold is 350ms (`LONG_PRESS_MS` in `js/epub-engine.js`). Raise it if
   taps still select text on your device, lower it if holding feels sluggish.
+- A note shown in place is trimmed at 700 characters (`NOTE_MAX_CHARS`, same
+  file). Past that it opens as a page instead, because a strip covering half the
+  screen is worse than a page turn.
+- Footnotes are epub-only. The epub engine finds them by resolving the link's
+  fragment in the book's own markup; a PDF has no equivalent to walk.
+- Notes are stripped to inline formatting -- italics and small caps survive,
+  everything else is unwrapped to plain text. Books can carry scripts and
+  styles, and neither belongs in a footnote strip.

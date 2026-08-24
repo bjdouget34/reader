@@ -4,9 +4,10 @@
 const KEY = 'my-reader:settings';
 
 const DEFAULTS = {
-  theme: 'light',   // light | sepia | dark
-  fontSize: 100,    // epub text size, percent
-  zoom: 100,        // pdf zoom, percent of fit-to-width
+  theme: 'light',       // a key of THEMES below
+  fontSize: 100,        // epub text size, percent
+  zoom: 100,            // pdf zoom, percent of fit-to-width
+  chromeHidden: false,  // reading with the top toolbar collapsed
 };
 
 export function loadSettings() {
@@ -23,10 +24,18 @@ export function saveSettings(patch) {
 
 // Both engines paint their own background, and the page around them needs to
 // match, so the palette lives here rather than in either engine.
+//
+// `bg` and `fg` are the book's own page colours. The surrounding chrome reads
+// its colours from a matching `body[data-theme="..."]` block in css/app.css --
+// adding a theme means adding it in both places, plus nothing else: the picker
+// in the toolbar is built from this object.
 export const THEMES = {
-  light: { bg: '#ffffff', fg: '#1a1a1a' },
-  sepia: { bg: '#f4ecd8', fg: '#3a3128' },
-  dark:  { bg: '#151515', fg: '#c9c9c9' },
+  light:    { label: 'Light',          bg: '#ffffff', fg: '#1a1a1a' },
+  sepia:    { label: 'Sepia',          bg: '#f4ecd8', fg: '#3a3128' },
+  dark:     { label: 'Dark',           bg: '#151515', fg: '#c9c9c9' },
+  night:    { label: 'Amber on black', bg: '#0b0b0b', fg: '#d8a94e' },
+  green:    { label: 'Green on black', bg: '#000000', fg: '#45de6c' },
+  contrast: { label: 'High contrast',  bg: '#000000', fg: '#ffffff' },
 };
 
 // Highlight colors. Add one here and it appears in the selection toolbar.

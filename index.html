@@ -54,14 +54,15 @@
       <button id="bigger" title="Larger">A+</button>
     </span>
 
-    <span class="group" role="group" aria-label="Theme">
-      <button data-theme-btn="light" aria-pressed="false" title="Light">☀</button>
-      <button data-theme-btn="sepia" aria-pressed="false" title="Sepia">◐</button>
-      <button data-theme-btn="dark"  aria-pressed="false" title="Dark">☾</button>
-    </span>
+    <!-- Populated from THEMES in js/settings.js -->
+    <select id="theme" class="picker" aria-label="Colour theme"></select>
 
     <span id="progress-label" class="readout wide"></span>
+    <button id="chrome-hide" class="chrome-toggle" title="Hide this toolbar" aria-label="Hide toolbar">⌃</button>
   </header>
+
+  <!-- Sits at the top edge once the toolbar is hidden. -->
+  <button id="chrome-show" title="Show toolbar" aria-label="Show toolbar" hidden>⌄</button>
 
   <div class="stage">
     <div id="viewer"></div>
@@ -74,6 +75,20 @@
     <!-- Visible arrows, for a mouse. -->
     <button id="prev" class="arrow left"  aria-label="Previous page">‹</button>
     <button id="next" class="arrow right" aria-label="Next page">›</button>
+
+    <!-- Shown after following a link out of the text, e.g. to the endnotes. -->
+    <button id="nav-back" hidden>‹ Back</button>
+
+    <!-- Footnote text, pulled in without leaving the page. -->
+    <aside id="note" hidden>
+      <div class="note-head">
+        <strong>Note</strong>
+        <div class="spacer"></div>
+        <button id="note-open" hidden title="Open the full note">Read in full</button>
+        <button id="note-close" aria-label="Close note">×</button>
+      </div>
+      <div id="note-body"></div>
+    </aside>
 
     <aside id="toc" class="drawer" hidden>
       <div class="drawer-head">

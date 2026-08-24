@@ -33,10 +33,13 @@ export async function open(record, container, hooks) {
   rendition.themes.select(settings.theme);
   rendition.themes.fontSize(settings.fontSize + '%');
 
-  // Registered before the first display() call, not after. epub.js runs content
-  // hooks as each section loads, so anything registered later simply never runs
-  // for the section already on screen -- which left the opening chapter of every
-  // book with no touch handling at all.
+  // ------------------------------------------------ touch, keys and links
+  //
+  // All of this is set up before the first display() call, deliberately.
+  // epub.js runs content hooks as each section loads, so a hook registered
+  // afterwards never runs for the section already on screen -- which once left
+  // the opening chapter of every book with no touch handling at all.
+
   // How long a touch must be held before it counts as "I am selecting text".
   // Anything shorter is a page tap, and whatever the browser selected along
   // the way gets thrown away.
@@ -101,6 +104,23 @@ export async function open(record, container, hooks) {
         clearSelection();
       }
     });
+
+    // Footnote and endnote links. Caught in the capture phase because epub.js
+    // installs its own onclick on every internal link, and it would navigate
+    // away before we got the chance to show the note in place.
+    doc.addEventListener('click', (e) => {
+      const el = e.target?.nodeType === 1 ? e.target : e.target?.parentElement;
+      const anchor = el?.closest?.('a[href]');
+      if (!anchor) return;
+
+      const raw = anchor.getAttribute('href') || '';
+      // Leave anything off-book to the browser.
+      if (/^(https?:|mailto:|tel:)/i.test(raw)) return;
+
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      followLink(raw);
+    }, true);
 
     doc.addEventListener('touchstart', (e) => {
       x0 = e.changedTouches[0].clientX;
@@ -229,10 +249,132 @@ export async function open(record, container, hooks) {
     hooks.onSelection?.({ cfi: cfiRange, text, rect: rectFor(cfiRange) });
   });
 
+  // ------------------------------------------------------- notes and links
+  //
+  // Both sample books mark notes up the same way: an <a> pointing at a
+  // separate notes file plus a fragment, with that fragment id sitting on an
+  // empty <a> inside the note's own paragraph. Resolving a note therefore
+  // means finding the id and walking up to the block that actually holds text.
+  //
+  // Short notes are shown in place at the foot of the page. Anything longer
+  // opens as a page, and the back stack is what makes that reversible.
+
+  const NOTE_MAX_CHARS = 700;
+  const backStack = [];
+
+  function reportNav() {
+    hooks.onNavState?.({
+      canGoBack: backStack.length > 0,
+      label: backStack.length ? backStack[backStack.length - 1].label : null,
+    });
+  }
+
+  // An href inside a chapter is relative to that chapter; the spine is keyed
+  // relative to the package file. Resolve one against the other.
+  function bookRelative(rawPath, fromHref) {
+    if (!rawPath) return fromHref;
+    try {
+      const url = new URL(rawPath, new URL(fromHref || '', 'http://book.local/'));
+      return decodeURIComponent(url.pathname.replace(/^\//, ''));
+    } catch {
+      return rawPath;
+    }
+  }
+
+  async function lookupNote(rawPath, hash) {
+    const fromHref = rendition.location?.start?.href || '';
+    const path = bookRelative(rawPath, fromHref);
+    const target = hash ? `${path}#${hash}` : path;
+
+    const section = book.spine.get(path);
+    if (!section) return { target };
+
+    // Never unload the section on screen -- that would blank the page.
+    const wasLoaded = !!section.document;
+    try {
+      if (!wasLoaded) await section.load(book.load.bind(book));
+      const doc = section.document;
+      if (!doc) return { target };
+
+      let el = null;
+      try { el = doc.getElementById(hash) || doc.querySelector(`a[name="${CSS.escape(hash)}"]`); } catch { /* odd id */ }
+      if (!el) return { target };
+
+      // The id is usually on an empty anchor; climb to the block with the text.
+      let block = el;
+      while (block.parentElement && block.parentElement !== doc.body
+             && (block.textContent || '').trim().length < 2) {
+        block = block.parentElement;
+      }
+
+      const text = (block.textContent || '').replace(/\s+/g, ' ').trim();
+      if (!text) return { target };
+
+      return {
+        target,
+        text,
+        html: sanitizeNote(block, NOTE_MAX_CHARS),
+        truncated: text.length > NOTE_MAX_CHARS,
+      };
+    } finally {
+      if (!wasLoaded) { try { section.unload(); } catch { /* ignore */ } }
+    }
+  }
+
+  async function followLink(raw) {
+    const [rawPath, hash] = String(raw).split('#');
+    let resolved = null;
+    try {
+      resolved = await lookupNote(rawPath, hash);
+    } catch (err) {
+      console.warn('could not resolve link', raw, err);
+    }
+
+    // A short note reads better where you are than on a page of its own.
+    if (resolved?.text) {
+      hooks.onNote?.({
+        html: resolved.html,
+        truncated: resolved.truncated,
+        target: resolved.target,
+      });
+      return;
+    }
+    goTarget(resolved?.target || raw);
+  }
+
+  // Navigate, remembering where we came from so there is a way back.
+  // Only label the back button with a position we can actually vouch for. The
+  // percentage comes from the locations index, which is still being built for
+  // the first few seconds of a long book -- quoting a stale 0% there is worse
+  // than saying nothing.
+  function positionLabel() {
+    if (!position || !book.locations.length()) return null;
+    const pct = book.locations.percentageFromCfi(position);
+    return Number.isFinite(pct) ? `${Math.round(pct * 100)}%` : null;
+  }
+
+  async function goTarget(target) {
+    backStack.push({ cfi: position, label: positionLabel() });
+    reportNav();
+    try { await rendition.display(target); } catch (err) { console.warn('could not open', target, err); }
+  }
+
+  async function goBack() {
+    const previous = backStack.pop();
+    reportNav();
+    if (previous?.cfi) {
+      try { await rendition.display(previous.cfi); } catch { /* ignore */ }
+    }
+  }
+
+  reportNav();
   report();
 
   return {
-    capabilities: { highlights: true, search: true },
+    capabilities: { highlights: true, search: true, notes: true },
+
+    back: goBack,
+    openTarget: goTarget,
 
     // Walk the spine a section at a time. Each section has to be parsed to be
     // searched, so results are reported in batches as they arrive rather than
@@ -347,6 +489,47 @@ function flattenToc(items, depth = 0, out = []) {
     if (item.subitems?.length) flattenToc(item.subitems, depth + 1, out);
   }
   return out;
+}
+
+// Notes come out of the book's own markup, so keep the inline formatting that
+// makes them readable and drop everything else -- no scripts, no styles, no
+// attributes, and links flattened to plain text since they lead back into the
+// chapter we are already standing in.
+const NOTE_KEEP = new Set(['EM', 'I', 'STRONG', 'B', 'SUP', 'SUB', 'SMALL', 'SPAN', 'BR', 'CITE', 'Q']);
+
+function sanitizeNote(block, maxChars) {
+  const clean = block.ownerDocument.createElement('div');
+
+  const copy = (from, to) => {
+    for (const node of from.childNodes) {
+      if (node.nodeType === 3) {
+        to.appendChild(clean.ownerDocument.createTextNode(node.nodeValue));
+      } else if (node.nodeType === 1) {
+        // Sections are parsed as XHTML, so tagName comes back lowercase here
+        // and uppercase in an HTML document. Normalise before comparing.
+        if (NOTE_KEEP.has(node.tagName.toUpperCase())) {
+          const el = clean.ownerDocument.createElement(node.tagName.toLowerCase());
+          copy(node, el);
+          to.appendChild(el);
+        } else {
+          // Unwrap: keep the words, discard the element. Anchors land here on
+          // purpose -- a note's own back-link is dead weight in a strip that
+          // already sits on the page it came from.
+          copy(node, to);
+        }
+      }
+    }
+  };
+  copy(block, clean);
+
+  let html = clean.innerHTML;
+  if ((clean.textContent || '').length > maxChars) {
+    // Trim on the text, then let the browser close any tags we cut through.
+    const holder = clean.ownerDocument.createElement('div');
+    holder.textContent = (clean.textContent || '').slice(0, maxChars).replace(/\s+\S*$/, '') + '…';
+    html = holder.innerHTML;
+  }
+  return html;
 }
 
 function clamp(n, lo, hi) { return Math.min(hi, Math.max(lo, n)); }

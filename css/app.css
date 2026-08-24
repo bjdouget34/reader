@@ -19,6 +19,21 @@ body[data-theme="dark"] {
   --panel: #1d1d1d; --accent: #6f9f83; --accent-fg: #10201a;
   --shadow: 0 1px 3px rgba(0, 0, 0, .5), 0 8px 24px rgba(0, 0, 0, .35);
 }
+body[data-theme="night"] {
+  --bg: #0b0b0b; --fg: #d8a94e; --muted: #8a6f34; --line: #2a2114;
+  --panel: #141008; --accent: #d8a94e; --accent-fg: #171104;
+  --shadow: 0 1px 3px rgba(0, 0, 0, .6), 0 8px 24px rgba(0, 0, 0, .4);
+}
+body[data-theme="green"] {
+  --bg: #000000; --fg: #45de6c; --muted: #2c8a45; --line: #12331c;
+  --panel: #061007; --accent: #45de6c; --accent-fg: #001005;
+  --shadow: 0 1px 3px rgba(0, 0, 0, .7), 0 8px 24px rgba(0, 0, 0, .5);
+}
+body[data-theme="contrast"] {
+  --bg: #000000; --fg: #ffffff; --muted: #b0b0b0; --line: #3a3a3a;
+  --panel: #0d0d0d; --accent: #ffffff; --accent-fg: #000000;
+  --shadow: 0 1px 3px rgba(0, 0, 0, .7), 0 8px 24px rgba(0, 0, 0, .5);
+}
 
 * { box-sizing: border-box; }
 
@@ -71,7 +86,16 @@ button.primary:hover { filter: brightness(1.08); }
 
 .group { display: inline-flex; align-items: center; gap: 2px; }
 .group button { padding: 7px 9px; }
-[data-theme-btn][aria-pressed="true"] { background: var(--accent); color: var(--accent-fg); border-color: transparent; }
+
+/* A real <select>, so a tablet gets its native picker rather than something
+   hand-rolled that fights the platform. */
+.picker {
+  font: inherit; font-size: 13px;
+  color: var(--fg); background: var(--bg);
+  border: 1px solid var(--line); border-radius: 8px;
+  padding: 7px 8px; max-width: 10.5em;
+}
+.picker:focus-visible { outline: 2px solid var(--accent); outline-offset: -1px; }
 
 .readout { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; min-width: 42px; text-align: center; }
 .readout.wide { min-width: 68px; text-align: right; }
@@ -180,6 +204,11 @@ body.dropping::after {
    layer's selection highlight along with it. */
 body[data-theme="dark"] .pdf-canvas { filter: invert(1) hue-rotate(180deg); }
 body[data-theme="sepia"] .pdf-canvas { filter: sepia(.32) saturate(.92) brightness(.98); }
+/* A page image cannot be recoloured properly, only filtered, so these are
+   approximations of the matching text themes rather than exact matches. */
+body[data-theme="contrast"] .pdf-canvas { filter: invert(1); }
+body[data-theme="night"] .pdf-canvas { filter: invert(1) sepia(.55) saturate(1.7) hue-rotate(-12deg); }
+body[data-theme="green"] .pdf-canvas { filter: invert(1) sepia(1) hue-rotate(68deg) saturate(2.4); }
 
 /* The text layer's spans are transparent, so selection is the only thing the
    reader ever sees of it. */
@@ -321,8 +350,63 @@ body[data-theme="dark"] .textLayer ::selection { background: rgba(120, 180, 255,
 #hl-toolbar.docked .hl-swatch { width: 38px; height: 38px; }
 #hl-toolbar.docked #hl-remove { font-size: 14px; padding: 9px 14px; }
 
+/* -------------------------------------------------------- collapsed chrome */
+
+body[data-chrome="hidden"] .reader-bar { display: none; }
+
+.chrome-toggle { padding: 7px 9px; line-height: 1; }
+
+#chrome-show {
+  position: absolute; z-index: 30;
+  top: max(6px, env(safe-area-inset-top));
+  right: max(10px, env(safe-area-inset-right));
+  width: 44px; height: 30px; padding: 0;
+  font-size: 15px; line-height: 1;
+  color: var(--muted);
+  background: color-mix(in srgb, var(--panel) 88%, transparent);
+  border-color: var(--line);
+  opacity: .75;
+}
+#chrome-show:hover { opacity: 1; }
+
 .reader-progress-track { flex: none; height: 3px; background: var(--line); }
 #reader-progress { display: block; height: 100%; width: 0; background: var(--accent); transition: width .2s; }
+
+/* ------------------------------------------------------------- footnotes */
+
+#note {
+  position: absolute; z-index: 25;
+  left: 0; right: 0; bottom: 0;
+  max-height: 45%;
+  display: flex; flex-direction: column;
+  background: var(--panel);
+  border-top: 2px solid var(--accent);
+  box-shadow: 0 -6px 18px rgba(0, 0, 0, .18);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.note-head {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 12px; border-bottom: 1px solid var(--line); flex: none;
+  font-size: 12px;
+}
+.note-head button { border: none; padding: 4px 8px; font-size: 12px; }
+#note-close { font-size: 18px; }
+#note-body {
+  overflow: auto; padding: 11px 14px;
+  font-size: 13.5px; line-height: 1.5; color: var(--fg);
+}
+#note-body em, #note-body i { font-style: italic; }
+
+/* Offered after following a link out of the text, so there is always a way
+   back from the endnotes. */
+#nav-back {
+  position: absolute; z-index: 24;
+  left: max(10px, env(safe-area-inset-left));
+  bottom: max(12px, env(safe-area-inset-bottom));
+  font-size: 13px; padding: 9px 14px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
 
 /* ---------------------------------------------------------------- status */
 

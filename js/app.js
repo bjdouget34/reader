@@ -2,7 +2,7 @@
 
 import { db, fingerprint, usage } from './db.js';
 import { openBook, readMetadata, detectFormat } from './reader.js';
-import { loadSettings, saveSettings, HIGHLIGHT_COLORS } from './settings.js';
+import { loadSettings, saveSettings, HIGHLIGHT_COLORS, THEMES } from './settings.js';
 
 const $ = (sel) => document.querySelector(sel);
 
@@ -171,6 +171,8 @@ async function openById(id) {
   $('#toc-list').textContent = '';
   $('#marks-list').textContent = '';
   resetSearch();
+  hideNote();
+  applyNavState({ canGoBack: false });
   // These stay disabled until we know the book actually has something to show.
   $('#toc-open').disabled = true;
   $('#marks-open').disabled = true;
@@ -200,6 +202,8 @@ async function openById(id) {
       // has to tell us when the selection went away.
       onDismiss: hideToolbar,
       onHighlights: renderMarks,
+      onNote: showNote,
+      onNavState: applyNavState,
     });
     $('#scale-label').textContent = session.scaleLabel();
     $('#marks-open').disabled = !session.capabilities.highlights;
@@ -237,6 +241,8 @@ function closeBook() {
   session = null;
   closeDrawers();
   hideToolbar();
+  hideNote();
+  applyNavState({ canGoBack: false });
   $('#viewer').textContent = '';
   show('library');
   renderLibrary();
@@ -450,6 +456,27 @@ function resultRow(hit, term) {
   return btn;
 }
 
+// ------------------------------------------------------------- footnotes
+
+function showNote({ html, truncated, target }) {
+  hideToolbar();                     // both of these live at the foot of the screen
+  $('#note-body').innerHTML = html;  // already stripped to inline tags by the engine
+  $('#note-open').hidden = !truncated;
+  $('#note-open').dataset.target = target || '';
+  $('#note').hidden = false;
+}
+
+function hideNote() {
+  $('#note').hidden = true;
+  $('#note-body').textContent = '';
+}
+
+function applyNavState({ canGoBack, label }) {
+  const btn = $('#nav-back');
+  btn.hidden = !canGoBack;
+  btn.textContent = label ? '\u2039 Back to ' + label : '\u2039 Back';
+}
+
 // ------------------------------------------------------------------ drawers
 
 function closeDrawers() {
@@ -470,12 +497,36 @@ function toggleDrawer(id) {
   if (id === 'search' && !target.hidden) $('#search-input').focus();
 }
 
+function buildThemePicker() {
+  const picker = $('#theme');
+  picker.textContent = '';
+  for (const [key, theme] of Object.entries(THEMES)) {
+    const option = document.createElement('option');
+    option.value = key;
+    option.textContent = theme.label;
+    picker.append(option);
+  }
+}
+
 function applyTheme() {
   const { theme } = loadSettings();
-  document.body.dataset.theme = theme;
-  for (const btn of document.querySelectorAll('[data-theme-btn]')) {
-    btn.setAttribute('aria-pressed', String(btn.dataset.themeBtn === theme));
-  }
+  const known = THEMES[theme] ? theme : 'light';
+  document.body.dataset.theme = known;
+  $('#theme').value = known;
+}
+
+// The toolbar collapses so a page of text can have the whole screen. The
+// choice sticks, because someone who wants it out of the way wants it to
+// stay out of the way.
+function applyChrome() {
+  const hidden = !!loadSettings().chromeHidden;
+  document.body.dataset.chrome = hidden ? 'hidden' : 'shown';
+  $('#chrome-show').hidden = !hidden;
+}
+
+function setChromeHidden(hidden) {
+  saveSettings({ chromeHidden: hidden });
+  applyChrome();
 }
 
 function mb(bytes) {
@@ -511,6 +562,7 @@ $('#back').addEventListener('click', closeBook);
 for (const [id, move] of [['#prev', 'prev'], ['#next', 'next'], ['#tap-prev', 'prev'], ['#tap-next', 'next']]) {
   $(id).addEventListener('click', () => {
     hideToolbar();          // the selection it referred to is off screen now
+    hideNote();             // as is the sentence the note belonged to
     session?.[move]();
   });
 }
@@ -527,6 +579,17 @@ for (const btn of document.querySelectorAll('[data-close]')) {
   btn.addEventListener('click', closeDrawers);
 }
 
+$('#note-close').addEventListener('click', hideNote);
+$('#note-open').addEventListener('click', () => {
+  const target = $('#note-open').dataset.target;
+  hideNote();
+  if (target) session?.openTarget?.(target);
+});
+$('#nav-back').addEventListener('click', () => {
+  hideNote();
+  session?.back?.();   // pdf sessions have no link history
+});
+
 $('#hl-remove').addEventListener('click', async () => {
   if (editing) await session?.removeHighlight(editing);
   hideToolbar();
@@ -539,13 +602,14 @@ $('#bigger').addEventListener('click', () => {
   if (session) { $('#scale-label').textContent = session.setScale(+10); hideToolbar(); }
 });
 
-for (const btn of document.querySelectorAll('[data-theme-btn]')) {
-  btn.addEventListener('click', () => {
-    const name = btn.dataset.themeBtn;
-    if (session) session.setTheme(name); else saveSettings({ theme: name });
-    applyTheme();
-  });
-}
+$('#theme').addEventListener('change', (e) => {
+  const name = e.target.value;
+  if (session) session.setTheme(name); else saveSettings({ theme: name });
+  applyTheme();
+});
+
+$('#chrome-hide').addEventListener('click', () => setChromeHidden(true));
+$('#chrome-show').addEventListener('click', () => setChromeHidden(false));
 
 document.addEventListener('keydown', (e) => {
   // The browser's own find cannot see inside the book's iframe or past the
@@ -559,7 +623,8 @@ document.addEventListener('keydown', (e) => {
   }
 
   if (e.key !== 'Escape') return;
-  if (!$('#hl-toolbar').hidden) hideToolbar();
+  if (!$('#note').hidden) hideNote();
+  else if (!$('#hl-toolbar').hidden) hideToolbar();
   else if (!$('#toc').hidden || !$('#marks').hidden || !$('#search').hidden) closeDrawers();
   else if (session) closeBook();
 });
@@ -574,7 +639,9 @@ document.addEventListener('pointerdown', (e) => {
 // -------------------------------------------------------------------- start
 
 buildSwatches();
+buildThemePicker();
 applyTheme();
+applyChrome();
 show('library');
 renderLibrary();
 
