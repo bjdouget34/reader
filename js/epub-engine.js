@@ -203,6 +203,16 @@ export async function open(record, container, hooks) {
   const onResize = debounce(() => { try { rendition.resize(); } catch { /* mid-teardown */ } }, 150);
   window.addEventListener('resize', onResize);
 
+  // Collapsing the toolbar changes the height of the box we render into
+  // without the window itself resizing, and epub.js only re-measures when it
+  // is told to. Left unwatched, the iframe kept the height it was built with
+  // while the stage around it grew or shrank, leaving a band of bare container
+  // down one edge. Watching the element catches the toolbar, rotation, and the
+  // on-screen keyboard alike. It is our own element, sized purely by CSS, so
+  // resizing the book inside it cannot feed back into this.
+  const boxObserver = new ResizeObserver(onResize);
+  boxObserver.observe(container);
+
   // ---------------------------------------------------------- highlights
   //
   // epub.js draws these as an SVG overlay above the text, keyed by CFI range,
@@ -463,6 +473,7 @@ export async function open(record, container, hooks) {
     destroy() {
       document.removeEventListener('keydown', onKey);
       window.removeEventListener('resize', onResize);
+      boxObserver.disconnect();
       try { rendition.destroy(); } catch { /* already gone */ }
       try { book.destroy(); } catch { /* already gone */ }
     },

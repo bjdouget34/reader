@@ -193,6 +193,17 @@ export async function open(record, container, hooks) {
   const onResize = debounce(() => { render().catch(() => {}); }, 200);
   window.addEventListener('resize', onResize);
 
+  // As in the epub engine: the toolbar collapsing resizes our box without
+  // resizing the window. Only the width changes what a page renders at, so a
+  // height-only change is not worth redrawing a page for.
+  let lastWidth = container.clientWidth;
+  const boxObserver = new ResizeObserver(() => {
+    if (container.clientWidth === lastWidth) return;
+    lastWidth = container.clientWidth;
+    onResize();
+  });
+  boxObserver.observe(container);
+
   await render();
 
   return {
@@ -281,6 +292,7 @@ export async function open(record, container, hooks) {
       destroyed = true;
       document.removeEventListener('keydown', onKey);
       window.removeEventListener('resize', onResize);
+      boxObserver.disconnect();
       stage.removeEventListener('touchstart', onTouchStart);
       stage.removeEventListener('touchend', onTouchEnd);
       if (renderTask) { try { renderTask.cancel(); } catch { /* ignore */ } }

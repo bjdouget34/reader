@@ -143,6 +143,13 @@ a desktop, where the mouse moves the hover away at once.
 If you add a hover style, put it in that block, and put nothing there that a
 touch user needs.
 
+Both engines also watch the element they render into with a `ResizeObserver`,
+not just `window.resize`. Collapsing the toolbar changes the height of that box
+without the window resizing at all, and epub.js only re-measures when told to --
+so the iframe kept the height it was built with while the stage around it grew,
+leaving a band of bare container down one edge. Anything that changes the size
+of the reading area needs to reach that observer.
+
 ## Known edges
 
 - DRM-protected files will not open, and are now refused at import with the
