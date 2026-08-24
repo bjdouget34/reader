@@ -196,6 +196,9 @@ async function openById(id) {
         editing = cfi;
         showToolbar(rect, { canRemove: true });
       },
+      // Taps inside the book's iframe never reach this document, so the engine
+      // has to tell us when the selection went away.
+      onDismiss: hideToolbar,
       onHighlights: renderMarks,
     });
     $('#scale-label').textContent = session.scaleLabel();
@@ -313,6 +316,17 @@ function showToolbar(rect, { canRemove }) {
   const bar = $('#hl-toolbar');
   $('#hl-remove').hidden = !canRemove;
   bar.hidden = false;
+
+  // On a touch screen the platform puts its own Copy / Share / Select all menu
+  // right beside the selection and wins any fight for that space. Dock ours to
+  // the bottom of the screen instead, where nothing else is competing.
+  if (window.matchMedia('(pointer: coarse)').matches) {
+    bar.classList.add('docked');
+    bar.style.top = '';
+    bar.style.left = '';
+    return;
+  }
+  bar.classList.remove('docked');
 
   // Sit above the selection, or below it when there is no room up there.
   const box = bar.getBoundingClientRect();

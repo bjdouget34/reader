@@ -75,6 +75,7 @@ export async function openBook(record, container, hooks = {}) {
     },
     onSelection: (selection) => hooks.onSelection?.(selection),
     onHighlightClick: (info) => hooks.onHighlightClick?.(info),
+    onDismiss: () => hooks.onDismiss?.(),
   }), OPEN_TIMEOUT_MS, 'This book took too long to open. Try again.');
 
   // Highlights are deliberate actions, so they are written straight away

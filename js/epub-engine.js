@@ -33,6 +33,94 @@ export async function open(record, container, hooks) {
   rendition.themes.select(settings.theme);
   rendition.themes.fontSize(settings.fontSize + '%');
 
+  // Registered before the first display() call, not after. epub.js runs content
+  // hooks as each section loads, so anything registered later simply never runs
+  // for the section already on screen -- which left the opening chapter of every
+  // book with no touch handling at all.
+  // How long a touch must be held before it counts as "I am selecting text".
+  // Anything shorter is a page tap, and whatever the browser selected along
+  // the way gets thrown away.
+  const LONG_PRESS_MS = 350;
+
+  // Selection events are only honoured once a deliberate press has armed them.
+  // This is what stops a plain tap from popping the highlight bar, and it stays
+  // armed while the selection handles are dragged around.
+  let selectionArmed = false;
+
+  function clearSelection() {
+    try { rendition.getContents()[0]?.window.getSelection()?.removeAllRanges(); } catch { /* ignore */ }
+  }
+
+  // Always drop the selection before paginating. In paginated mode epub.js
+  // moves between pages by setting the container's scrollLeft, and a live
+  // selection makes the browser scroll to keep it on screen -- which lands
+  // between two columns and shows as a gap down one side of the page.
+  function turn(direction) {
+    clearSelection();
+    selectionArmed = false;
+    return direction === 'next' ? rendition.next() : rendition.prev();
+  }
+
+  // Touch and selection handling, registered inside each chapter document as it
+  // loads, because the text lives in an iframe we do not otherwise touch.
+  rendition.hooks.content.register((contents) => {
+    const doc = contents.document;
+    let x0 = null, y0 = null, pressedAt = 0, pressedWith = 'mouse', pointerIsDown = false;
+
+    doc.addEventListener('pointerdown', (e) => {
+      pointerIsDown = true;
+      pressedAt = Date.now();
+      pressedWith = e.pointerType || 'mouse';
+      // Anything already on screen refers to the previous selection.
+      hooks.onDismiss?.();
+    }, { passive: true });
+
+    doc.addEventListener('pointerup', () => {
+      pointerIsDown = false;
+      const heldMs = Date.now() - pressedAt;
+      // A mouse drag is explicit enough on its own; touch has to be held.
+      // This stays set until the next pointerdown, so the brief empty selection
+      // the platform emits while it builds a long-press selection cannot
+      // disarm it on the way through.
+      selectionArmed = pressedWith !== 'touch' || heldMs >= LONG_PRESS_MS;
+    }, { passive: true });
+
+    // Selection changes never reach the parent document, so both the dismissal
+    // and the tap cleanup have to be handled in here.
+    doc.addEventListener('selectionchange', () => {
+      const text = contents.window.getSelection()?.toString().trim();
+
+      // Collapsed to nothing -- whatever the toolbar referred to is gone.
+      if (!text) { hooks.onDismiss?.(); return; }
+
+      // A finger tap that the platform turned into a word selection anyway.
+      // Undo it: an unwanted selection is what drags the page out of alignment
+      // on the next turn. Only ever applies to touch, and only once the finger
+      // is up, so a mouse drag-select is never interfered with.
+      if (!selectionArmed && !pointerIsDown && pressedWith === 'touch') {
+        clearSelection();
+      }
+    });
+
+    doc.addEventListener('touchstart', (e) => {
+      x0 = e.changedTouches[0].clientX;
+      y0 = e.changedTouches[0].clientY;
+    }, { passive: true });
+
+    doc.addEventListener('touchend', (e) => {
+      if (x0 === null) return;
+      const dx = e.changedTouches[0].clientX - x0;
+      const dy = e.changedTouches[0].clientY - y0;
+      // A swipe is a drag, not a press, so it must not count as page-tap either.
+      if (Math.abs(dx) > 45 && Math.abs(dx) > Math.abs(dy)) {
+        selectionArmed = false;
+        turn(dx < 0 ? 'next' : 'prev');
+      }
+      x0 = y0 = null;
+    }, { passive: true });
+  });
+
+
   // Start where we left off; no stored position means page one.
   await rendition.display(record.position || undefined);
   await book.ready;
@@ -76,31 +164,11 @@ export async function open(record, container, hooks) {
   const onKey = (e) => {
     // Arrow keys belong to whatever field has focus -- the search box, for one.
     if (e.target?.closest?.('input, textarea, select, [contenteditable]')) return;
-    if (e.key === 'ArrowRight' || e.key === 'PageDown') rendition.next();
-    if (e.key === 'ArrowLeft' || e.key === 'PageUp') rendition.prev();
+    if (e.key === 'ArrowRight' || e.key === 'PageDown') turn('next');
+    if (e.key === 'ArrowLeft' || e.key === 'PageUp') turn('prev');
   };
   document.addEventListener('keydown', onKey);
   rendition.on('keydown', onKey);
-
-  // Swipe, for the tablet. Registered inside each chapter document as it loads,
-  // because the text lives in an iframe we do not otherwise touch.
-  rendition.hooks.content.register((contents) => {
-    const doc = contents.document;
-    let x0 = null, y0 = null;
-    doc.addEventListener('touchstart', (e) => {
-      x0 = e.changedTouches[0].clientX;
-      y0 = e.changedTouches[0].clientY;
-    }, { passive: true });
-    doc.addEventListener('touchend', (e) => {
-      if (x0 === null) return;
-      const dx = e.changedTouches[0].clientX - x0;
-      const dy = e.changedTouches[0].clientY - y0;
-      if (Math.abs(dx) > 45 && Math.abs(dx) > Math.abs(dy)) {
-        if (dx < 0) rendition.next(); else rendition.prev();
-      }
-      x0 = y0 = null;
-    }, { passive: true });
-  });
 
   const onResize = debounce(() => { try { rendition.resize(); } catch { /* mid-teardown */ } }, 150);
   window.addEventListener('resize', onResize);
@@ -154,6 +222,8 @@ export async function open(record, container, hooks) {
   }
 
   rendition.on('selected', (cfiRange, contents) => {
+    // A quick tap is a page tap, never a highlight gesture.
+    if (!selectionArmed) return;
     const text = contents.window.getSelection()?.toString().trim() || '';
     if (!text) return;
     hooks.onSelection?.({ cfi: cfiRange, text, rect: rectFor(cfiRange) });
@@ -208,19 +278,17 @@ export async function open(record, container, hooks) {
 
     addHighlight(highlight) {
       draw(highlight);
-      this.clearSelection();
+      clearSelection();
     },
 
     removeHighlight(cfi) {
       try { rendition.annotations.remove(cfi, 'highlight'); } catch { /* already gone */ }
     },
 
-    clearSelection() {
-      try { rendition.getContents()[0]?.window.getSelection().removeAllRanges(); } catch { /* ignore */ }
-    },
+    clearSelection,
 
-    next: () => rendition.next(),
-    prev: () => rendition.prev(),
+    next: () => turn('next'),
+    prev: () => turn('prev'),
     goto: (href) => rendition.display(href),
 
     setTheme(name) {

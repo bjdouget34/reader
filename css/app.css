@@ -306,6 +306,21 @@ body[data-theme="dark"] .textLayer ::selection { background: rgba(120, 180, 255,
 .hl-swatch:hover { transform: scale(1.12); }
 #hl-remove { font-size: 12px; padding: 5px 9px; }
 
+/* Touch screens: docked to the bottom, out of the way of the platform's own
+   selection menu, with targets big enough for a thumb. */
+#hl-toolbar.docked {
+  top: auto;
+  left: 50%;
+  bottom: calc(18px + env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  gap: 12px;
+  padding: 12px 16px;
+  border-radius: 999px;
+}
+#hl-toolbar.docked .hl-colors { gap: 12px; }
+#hl-toolbar.docked .hl-swatch { width: 38px; height: 38px; }
+#hl-toolbar.docked #hl-remove { font-size: 14px; padding: 9px 14px; }
+
 .reader-progress-track { flex: none; height: 3px; background: var(--line); }
 #reader-progress { display: block; height: 100%; width: 0; background: var(--accent); transition: width .2s; }
 

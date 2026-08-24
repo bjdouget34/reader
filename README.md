@@ -32,10 +32,12 @@ library. The `node_modules` directory here exists solely to re-vendor pdf.js
 - **Selectable PDF text.** pdf.js draws an invisible text layer over the page
   image, aligned to the pixel, so you can select and copy. Scanned PDFs have no
   text in them, so there is nothing to select on those.
-- **EPUB highlights** in four colours. Select text, pick a colour. Highlights
-  are stored with the book, redrawn when you reopen it, and listed in the
-  Highlights panel -- click one to jump straight to it. Click a highlight in the
-  text to recolour or remove it.
+- **EPUB highlights** in four colours. On a touch screen, press and hold to
+  select -- a quick tap is a page tap and never opens the colour bar. The bar
+  docks to the bottom of the screen on touch, clear of the platform's own
+  Copy / Share menu. Highlights are stored with the book, redrawn when you
+  reopen it, and listed in the Highlights panel -- tap one to jump straight to
+  it. Tap a highlight in the text to recolour or remove it.
 - **Search inside a book**, EPUB or PDF. `Ctrl+F` (or the Search button) opens
   the panel; results stream in as the scan runs, with the match highlighted in
   each excerpt and a page number for PDFs. Click a result to jump there.
@@ -136,3 +138,5 @@ A few starting points, roughly easiest first:
   see "took too long to open", that is this.
 - The generated icons are deliberately plain. `npm run icons` after editing
   `tools/make-icons.js`.
+- Press-and-hold is 350ms (`LONG_PRESS_MS` in `js/epub-engine.js`). Raise it if
+  taps still select text on your device, lower it if holding feels sluggish.
