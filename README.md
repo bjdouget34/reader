@@ -129,6 +129,20 @@ A few starting points, roughly easiest first:
 - **Sync between devices.** The honest answer is that this needs a server, and
   it is a much bigger job than everything above.
 
+## Touch and hover
+
+Every `:hover` style lives inside a single `@media (hover: hover)` block near
+the bottom of `css/app.css`, and that is not tidiness. On a touch screen the
+hover state does not follow a finger -- it sticks to whatever you last tapped
+until you tap something else. The page-turn zones are full-height buttons down
+each side of the page, so an ordinary `button:hover { background }` painted an
+opaque strip over the text on the side you tapped and left it there until you
+tapped the page again. It looked exactly like a layout bug and was invisible on
+a desktop, where the mouse moves the hover away at once.
+
+If you add a hover style, put it in that block, and put nothing there that a
+touch user needs.
+
 ## Known edges
 
 - DRM-protected files will not open, and are now refused at import with the
