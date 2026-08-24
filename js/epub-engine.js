@@ -19,6 +19,15 @@ export async function open(record, container, hooks) {
     flow: 'paginated',
     spread: 'none',
     allowScriptedContent: false,
+
+    // gap: 0 is load-bearing. Left to itself epub.js sets the CSS column width
+    // to the full page width and then adds a gap of roughly width/12 on top,
+    // so the columns repeat every (page + 64)px while it scrolls by exactly one
+    // page. Every turn drifts by that gap: you get a blank strip down one side
+    // and the far edge of the text cut off, until something forces a relayout.
+    // With no gap the column step is exactly one page. Nothing is lost --
+    // only one column is ever on screen, so an inter-column gutter is invisible.
+    gap: 0,
   });
 
   for (const [name, c] of Object.entries(THEMES)) {
@@ -26,6 +35,7 @@ export async function open(record, container, hooks) {
       body: { background: c.bg, color: c.fg },
       'p, div, span, li, h1, h2, h3, h4': { color: c.fg + ' !important' },
       a: { color: c.fg + ' !important' },
+      img: { 'max-width': '100%' },
     });
   }
 

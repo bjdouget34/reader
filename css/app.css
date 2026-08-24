@@ -189,7 +189,15 @@ body.dropping::after {
 /* ---------------------------------------------------------------- reader */
 
 .stage { position: relative; flex: 1; min-height: 0; overflow: hidden; }
-#viewer { position: absolute; inset: 0; }
+
+/* Inset left and right so text is not flush against the screen edges. This
+   narrows the box epub.js renders into rather than padding the book's own
+   markup: epub.js pins the CSS column width to the full width of whatever
+   element it is handed, so padding inside the book pushes the text straight
+   back into overflow, and per-element padding lands differently in every book
+   depending on how its chapters are nested. The strips either side show the
+   page background, which the themes keep in step. */
+#viewer { position: absolute; top: 0; bottom: 0; left: 20px; right: 20px; }
 
 /* pdf.js paints into a canvas we scroll; epub.js manages its own iframe. */
 /* Centred with auto margins rather than justify-content, deliberately. With
