@@ -162,6 +162,10 @@ touch user needs.
 - Search stops at 300 matches per book. A common word hits that instantly, and
   the panel says so; a longer phrase is the answer. Each search re-reads the
   book, so a broad term on a 450-page PDF takes a second or two.
+- The text runs the full width of the screen; the side margins are whatever the
+  book's own stylesheet asks for. To pull the text in from the edges, give
+  `#viewer` in `css/app.css` a left/right inset -- never pad the book's markup,
+  for the reason noted in that rule.
 - Very large PDFs render a page at a time, so page turns on a slow tablet are
   not instant. `MAX_CANVAS_PIXELS` in `js/pdf-engine.js` caps memory use.
 - Zooming a PDF past fit-to-width means panning sideways to read, which is the
