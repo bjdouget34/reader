@@ -2,7 +2,7 @@
 
 import { db, fingerprint, usage } from './db.js';
 import { openBook, readMetadata, detectFormat, describeFileError } from './reader.js';
-import { loadSettings, saveSettings, HIGHLIGHT_COLORS, THEMES } from './settings.js';
+import { loadSettings, saveSettings, HIGHLIGHT_COLORS, THEMES, BUILD } from './settings.js';
 
 const $ = (sel) => document.querySelector(sel);
 
@@ -28,9 +28,10 @@ async function renderLibrary() {
   for (const book of books) grid.append(bookCard(book));
 
   const est = await usage();
-  $('#usage').textContent = est
+  const stored = est
     ? `${books.length} book${books.length === 1 ? '' : 's'} · ${mb(est.usage)} stored on this device`
-    : '';
+    : `${books.length} book${books.length === 1 ? '' : 's'}`;
+  $('#usage').textContent = `${stored} · ${BUILD}`;
 }
 
 function bookCard(book) {
@@ -650,6 +651,21 @@ show('library');
 renderLibrary();
 
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('sw.js')
+  // updateViaCache: 'none' keeps the browser from serving sw.js itself out of
+  // its HTTP cache, which on a host with max-age would delay every update.
+  navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' })
+    .then((registration) => {
+      registration.update().catch(() => {});
+
+      // A phone or tablet keeps the app alive for days, so without this you go
+      // on running the old code until you remember to close it properly. When
+      // a new worker takes over, reload once to pick it up.
+      let reloading = false;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (reloading) return;
+        reloading = true;
+        window.location.reload();
+      });
+    })
     .catch(err => console.warn('offline caching unavailable', err));
 }

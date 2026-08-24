@@ -10,7 +10,7 @@
 //
 // Bump CACHE when you change the file list, or the old cache lingers.
 
-const CACHE = 'my-reader-v2';
+const CACHE = 'my-reader-v3';
 
 const CORE = [
   './',
@@ -91,7 +91,13 @@ async function cacheFirst(request) {
 async function networkFirst(request) {
   const cache = await caches.open(CACHE);
   try {
-    const response = await fetch(request);
+    // { cache: 'no-cache' } matters more than it looks. A plain fetch() inside
+    // a service worker still goes through the browser's HTTP cache, and GitHub
+    // Pages serves these files with max-age=600 -- so "network first" could
+    // hand back a ten-minute-old file without touching the network, then store
+    // that stale copy here. This forces a revalidation against the ETag, which
+    // costs a 304 and nothing more.
+    const response = await fetch(request, { cache: 'no-cache' });
     if (response.ok) cache.put(request, response.clone());
     return response;
   } catch (err) {

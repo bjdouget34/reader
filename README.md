@@ -150,6 +150,25 @@ so the iframe kept the height it was built with while the stage around it grew,
 leaving a band of bare container down one edge. Anything that changes the size
 of the reading area needs to reach that observer.
 
+## Getting an update onto a device
+
+The library footer shows the build (`v3`). If a device is not behaving like the
+code you just pushed, look there first -- it answers "is this actually running
+the new version?" without guesswork.
+
+Two things make an update land rather than linger:
+
+- The service worker fetches app files with `{ cache: 'no-cache' }`. A plain
+  `fetch()` inside a worker still goes through the browser's HTTP cache, and
+  GitHub Pages serves with `max-age=600`, so "network first" could otherwise
+  return a ten-minute-old file without touching the network and then cache it.
+- It registers with `updateViaCache: 'none'` and reloads once when a new worker
+  takes over. A tablet keeps a PWA alive for days, so without that you keep
+  running old code until you remember to close it properly.
+
+Bump `BUILD` in `js/settings.js` and `CACHE` in `sw.js` together when you
+deploy something you need to be able to confirm arrived.
+
 ## Known edges
 
 - DRM-protected files will not open, and are now refused at import with the
