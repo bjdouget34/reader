@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Reader</title>
+<meta name="theme-color" content="#ffffff">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="lib/pdf-textlayer.css">
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body data-view="library" data-theme="light">
+
+<!-- ============================================================ library -->
+<section id="library-view">
+  <header class="bar">
+    <h1>Reader</h1>
+    <div class="spacer"></div>
+    <button id="add" class="primary">Add books</button>
+  </header>
+
+  <input id="file" type="file" multiple hidden
+         accept=".epub,.pdf,application/epub+zip,application/pdf">
+
+  <div id="grid" class="grid"></div>
+
+  <div id="empty" class="empty" hidden>
+    <p class="big">No books yet</p>
+    <p>Add an <strong>.epub</strong> or <strong>.pdf</strong> and it is stored on this
+       device. Everything after that works with no connection.</p>
+    <button id="add-empty" class="primary">Choose files</button>
+    <p class="hint">On a computer you can also drag files anywhere onto this window.</p>
+  </div>
+
+  <footer id="usage" class="usage"></footer>
+</section>
+
+<!-- ============================================================= reader -->
+<section id="reader-view" hidden>
+  <header class="bar reader-bar">
+    <button id="back" title="Back to library (Esc)">‹ Library</button>
+    <h2 id="book-title"></h2>
+    <div class="spacer"></div>
+
+    <button id="toc-open" disabled title="Table of contents">Contents</button>
+    <button id="marks-open" disabled title="Highlights">Highlights</button>
+    <button id="search-open" disabled title="Search this book (Ctrl+F)">Search</button>
+
+    <span class="group" role="group" aria-label="Size">
+      <button id="smaller" title="Smaller">A−</button>
+      <span id="scale-label" class="readout">100%</span>
+      <button id="bigger" title="Larger">A+</button>
+    </span>
+
+    <span class="group" role="group" aria-label="Theme">
+      <button data-theme-btn="light" aria-pressed="false" title="Light">☀</button>
+      <button data-theme-btn="sepia" aria-pressed="false" title="Sepia">◐</button>
+      <button data-theme-btn="dark"  aria-pressed="false" title="Dark">☾</button>
+    </span>
+
+    <span id="progress-label" class="readout wide"></span>
+  </header>
+
+  <div class="stage">
+    <div id="viewer"></div>
+
+    <!-- Tap targets for touch. The middle of the page stays free so text can
+         still be selected. -->
+    <button id="tap-prev" class="tap left"  aria-label="Previous page"></button>
+    <button id="tap-next" class="tap right" aria-label="Next page"></button>
+
+    <!-- Visible arrows, for a mouse. -->
+    <button id="prev" class="arrow left"  aria-label="Previous page">‹</button>
+    <button id="next" class="arrow right" aria-label="Next page">›</button>
+
+    <aside id="toc" class="drawer" hidden>
+      <div class="drawer-head">
+        <strong>Contents</strong>
+        <button data-close="toc" aria-label="Close contents">×</button>
+      </div>
+      <nav id="toc-list" class="drawer-body"></nav>
+    </aside>
+
+    <aside id="marks" class="drawer" hidden>
+      <div class="drawer-head">
+        <strong>Highlights</strong>
+        <button data-close="marks" aria-label="Close highlights">×</button>
+      </div>
+      <div id="marks-list" class="drawer-body"></div>
+    </aside>
+
+    <aside id="search" class="drawer" hidden>
+      <div class="drawer-head">
+        <strong>Search</strong>
+        <button data-close="search" aria-label="Close search">×</button>
+      </div>
+      <form id="search-form" class="search-form">
+        <input id="search-input" type="search" placeholder="Word or phrase"
+               autocomplete="off" spellcheck="false" aria-label="Search this book">
+        <button type="submit" class="primary">Go</button>
+      </form>
+      <p id="search-status" class="search-status"></p>
+      <div id="search-results" class="drawer-body"></div>
+    </aside>
+  </div>
+
+  <div class="reader-progress-track"><span id="reader-progress"></span></div>
+</section>
+
+<!-- Appears over the text when you select something in an epub. -->
+<div id="hl-toolbar" hidden>
+  <span id="hl-colors" class="hl-colors"></span>
+  <button id="hl-remove" hidden title="Remove highlight">Remove</button>
+</div>
+
+<p id="status" class="status" hidden></p>
+
+<!-- epub.js is a classic script and expects JSZip as a global, so both load
+     the old-fashioned way. pdf.js is a module and is imported on demand by
+     js/pdf-engine.js, so opening an epub never downloads it. -->
+<script src="lib/jszip.min.js"></script>
+<script src="lib/epub.min.js"></script>
+<script type="module" src="js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,9 @@
+node_modules/
+
+# lib/ is deliberately committed. The vendored copies of epub.js, JSZip and
+# pdf.js are what make this thing work with no install step and no connection.
+
+# Your own books. These live inside the app folder so the dev server can reach
+# them, which also means git would happily publish them -- and a GitHub Pages
+# site is public. Keep them local.
+sample_books/

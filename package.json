@@ -1,0 +1,14 @@
+{
+  "name": "my-reader",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A small offline ebook reader for epub and pdf. No build step.",
+  "scripts": {
+    "start": "node serve.js",
+    "icons": "node tools/make-icons.js",
+    "vendor": "npm install && node -e \"const f=require('fs');for(const n of ['pdf.min.mjs','pdf.worker.min.mjs'])f.copyFileSync('node_modules/pdfjs-dist/build/'+n,'lib/'+n);console.log('re-vendored pdf.js')\""
+  },
+  "devDependencies": {
+    "pdfjs-dist": "^6.2.108"
+  }
+}
