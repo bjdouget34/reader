@@ -11,7 +11,9 @@
 //     position,  // epub: a CFI string. pdf: a page number.
 //     percent,   // 0-100, for the library progress bar
 //     locations, // epub only: cached epub.js locations index
-//     highlights,// epub only: [{ cfi, text, color, created }]
+//     highlights,// [{ id, anchor, text, color, created }] where anchor is
+//                //   { cfi } for an epub or { page, rects } for a pdf, rects
+//                //   being fractions of the page so they hold at any zoom
 //   }
 
 const DB_NAME = 'my-reader';

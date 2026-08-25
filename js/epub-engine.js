@@ -67,33 +67,22 @@ export async function open(record, container, hooks) {
   // afterwards never runs for the section already on screen -- which once left
   // the opening chapter of every book with no touch handling at all.
 
-  // How long a touch must be held before it counts as "I am selecting text".
-  // Anything shorter is a page tap, and whatever the browser selected along
-  // the way gets thrown away.
-  const LONG_PRESS_MS = 350;
-
-  // Selection events are only honoured after a deliberate press. This is what
-  // stops a plain tap from popping the highlight bar. The press state lives out
-  // here rather than in the content hook because the 'selected' handler below
-  // needs to read it as well.
-  let selectionArmed = false;
-  let pressedAt = 0;
-  let pressedWith = 'mouse';
-  let pointerIsDown = false;
-  let lastPressMs = 0;
-
-  // Was the press that produced this selection a deliberate one? A mouse drag
-  // always counts. Touch has to be held. If the finger is still down -- which is
-  // the usual case while the platform is building its selection -- measure from
-  // when it went down rather than waiting for an end that may never come.
-  function pressWasDeliberate() {
-    if (pressedWith !== 'touch') return true;
-    const heldMs = pointerIsDown ? Date.now() - pressedAt : lastPressMs;
-    return heldMs >= LONG_PRESS_MS;
-  }
+  // Text selection is the platform's business, not ours. Earlier versions tried
+  // to tell a page tap from a deliberate press so the colour bar could appear
+  // on its own, and Android kept reporting the gesture differently -- a
+  // long-press-to-select ends by cancelling the pointer rather than releasing
+  // it, and a plain tap can select a word anyway. So nothing here watches
+  // gestures. We remember whatever is selected, and a button in the toolbar
+  // acts on it.
+  let remembered = null;      // { anchor: { cfi }, text }
 
   function clearSelection() {
     try { rendition.getContents()[0]?.window.getSelection()?.removeAllRanges(); } catch { /* ignore */ }
+  }
+
+  function forgetSelection() {
+    remembered = null;
+    hooks.onSelectionAvailable?.(null);
   }
 
   // Always drop the selection before paginating. In paginated mode epub.js
@@ -102,7 +91,7 @@ export async function open(record, container, hooks) {
   // between two columns and shows as a gap down one side of the page.
   function turn(direction) {
     clearSelection();
-    selectionArmed = false;
+    forgetSelection();
     return direction === 'next' ? rendition.next() : rendition.prev();
   }
 
@@ -112,43 +101,20 @@ export async function open(record, container, hooks) {
     const doc = contents.document;
     let x0 = null, y0 = null;
 
-    doc.addEventListener('pointerdown', (e) => {
-      pointerIsDown = true;
-      pressedAt = Date.now();
-      pressedWith = e.pointerType || 'mouse';
-      // Anything already on screen refers to the previous selection.
-      hooks.onDismiss?.();
-    }, { passive: true });
-
-    // pointercancel matters as much as pointerup here. Android ends a
-    // long-press-to-select by cancelling the pointer -- the browser takes the
-    // gesture over for its own selection handles and never sends an "up". Arming
-    // only on pointerup meant a deliberate press armed nothing at all, so the
-    // platform's Copy/Share menu appeared and the colour bar did not.
-    const endPress = () => {
-      pointerIsDown = false;
-      lastPressMs = Date.now() - pressedAt;
-      selectionArmed = pressWasDeliberate();
-      hooks.onGesture?.({ heldMs: lastPressMs, armed: selectionArmed });
-    };
-    doc.addEventListener('pointerup', endPress, { passive: true });
-    doc.addEventListener('pointercancel', endPress, { passive: true });
-
-    // Selection changes never reach the parent document, so both the dismissal
-    // and the tap cleanup have to be handled in here.
+    // Selection changes never reach the parent document, so this has to be
+    // caught in here. Whatever is selected gets remembered, so the toolbar can
+    // act on it even after tapping the toolbar collapses the selection itself.
     doc.addEventListener('selectionchange', () => {
-      const text = contents.window.getSelection()?.toString().trim();
+      const selection = contents.window.getSelection();
+      const text = selection?.toString().trim();
+      if (!text) return;                 // deliberately keeps the last one
 
-      // Collapsed to nothing -- whatever the toolbar referred to is gone.
-      if (!text) { hooks.onDismiss?.(); return; }
-
-      // A finger tap that the platform turned into a word selection anyway.
-      // Undo it: an unwanted selection is what drags the page out of alignment
-      // on the next turn. Only ever applies to touch, and only once the finger
-      // is up, so a mouse drag-select is never interfered with.
-      if (!pressWasDeliberate() && !pointerIsDown && pressedWith === 'touch') {
-        clearSelection();
-      }
+      try {
+        const cfi = contents.cfiFromRange(selection.getRangeAt(0));
+        if (!cfi) return;
+        remembered = { anchor: { cfi }, text };
+        hooks.onSelectionAvailable?.({ text });
+      } catch { /* a selection epub.js cannot address */ }
     });
 
     // Footnote and endnote links. Caught in the capture phase because epub.js
@@ -177,9 +143,7 @@ export async function open(record, container, hooks) {
       if (x0 === null) return;
       const dx = e.changedTouches[0].clientX - x0;
       const dy = e.changedTouches[0].clientY - y0;
-      // A swipe is a drag, not a press, so it must not count as page-tap either.
       if (Math.abs(dx) > 45 && Math.abs(dx) > Math.abs(dy)) {
-        selectionArmed = false;
         turn(dx < 0 ? 'next' : 'prev');
       }
       x0 = y0 = null;
@@ -281,36 +245,47 @@ export async function open(record, container, hooks) {
     }
   }
 
-  function draw(highlight) {
+  // What is currently painted, so a fresh list can be diffed against it rather
+  // than tearing every annotation down and rebuilding it.
+  const drawn = new Map();   // id -> { cfi, color }
+
+  function drawOne(h) {
+    const cfi = h.anchor?.cfi;
+    if (!cfi) return;
     rendition.annotations.add(
       'highlight',
-      highlight.cfi,
+      cfi,
       {},
-      () => hooks.onHighlightClick?.({ cfi: highlight.cfi, rect: rectFor(highlight.cfi) }),
+      () => hooks.onHighlightClick?.({ id: h.id, rect: rectFor(cfi) }),
       'hl',
       // These land as attributes on the <g> wrapping the rects, which the
       // rects inherit. fill-opacity is what lets the text show through --
       // mix-blend-mode is CSS-only and silently does nothing here.
-      {
-        fill: highlight.color,
-        'fill-opacity': '0.35',
-      },
+      { fill: h.color, 'fill-opacity': '0.35' },
     );
+    drawn.set(h.id, { cfi, color: h.color });
   }
 
-  for (const highlight of record.highlights || []) {
-    try { draw(highlight); } catch { /* a CFI from a different edition of the book */ }
+  function eraseOne(id) {
+    const entry = drawn.get(id);
+    if (!entry) return;
+    try { rendition.annotations.remove(entry.cfi, 'highlight'); } catch { /* already gone */ }
+    drawn.delete(id);
   }
 
-  rendition.on('selected', (cfiRange, contents) => {
-    // A quick tap is a page tap, never a highlight gesture. Asked afresh rather
-    // than trusting the flag, because on touch the selection often arrives while
-    // the finger is still down and no end event has run yet.
-    if (!selectionArmed && !pressWasDeliberate()) return;
-    const text = contents.window.getSelection()?.toString().trim() || '';
-    if (!text) return;
-    hooks.onSelection?.({ cfi: cfiRange, text, rect: rectFor(cfiRange) });
-  });
+  function syncHighlights(list) {
+    const wanted = new Map((list || []).map(h => [h.id, h]));
+    for (const id of [...drawn.keys()]) {
+      const h = wanted.get(id);
+      // A colour change has to be redrawn; epub.js has no way to restyle one.
+      if (!h || drawn.get(id).color !== h.color) eraseOne(id);
+    }
+    for (const h of list || []) {
+      if (drawn.has(h.id)) continue;
+      try { drawOne(h); } catch { /* a CFI from a different edition of the book */ }
+    }
+  }
+
 
   // ------------------------------------------------------- notes and links
   //
@@ -436,6 +411,13 @@ export async function open(record, container, hooks) {
   return {
     capabilities: { highlights: true, search: true, notes: true },
 
+    // The toolbar acts on whatever was last selected, so it has to be able to
+    // ask for it. Reading the live selection here would be too late: tapping
+    // the toolbar is itself enough to collapse it.
+    captureSelection: () => remembered,
+    clearSelection() { clearSelection(); forgetSelection(); },
+    syncHighlights,
+
     back: goBack,
     openTarget: goTarget,
 
@@ -490,16 +472,6 @@ export async function open(record, container, hooks) {
       return { total: found, capped: found >= cap };
     },
 
-    addHighlight(highlight) {
-      draw(highlight);
-      clearSelection();
-    },
-
-    removeHighlight(cfi) {
-      try { rendition.annotations.remove(cfi, 'highlight'); } catch { /* already gone */ }
-    },
-
-    clearSelection,
 
     next: () => turn('next'),
     prev: () => turn('prev'),

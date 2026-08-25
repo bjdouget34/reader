@@ -90,17 +90,27 @@ export async function openBook(record, container, hooks = {}) {
     onLocations: (locations) => {
       db.patch(record.id, { locations }).catch(() => {});
     },
-    onSelection: (selection) => hooks.onSelection?.(selection),
+    onSelectionAvailable: (info) => hooks.onSelectionAvailable?.(info),
     onHighlightClick: (info) => hooks.onHighlightClick?.(info),
-    onDismiss: () => hooks.onDismiss?.(),
-    onGesture: (info) => hooks.onGesture?.(info),
     onNote: (note) => hooks.onNote?.(note),
     onNavState: (state) => hooks.onNavState?.(state),
   }), OPEN_TIMEOUT_MS, 'This book took too long to open. Try again.');
 
   // Highlights are deliberate actions, so they are written straight away
   // rather than debounced like the reading position.
-  let highlights = [...(record.highlights || [])];
+  //
+  // Each carries a format-neutral anchor: { cfi } for an epub, or
+  // { page, rects } for a pdf. Records written before that existed kept the
+  // CFI at the top level, so they are brought forward on the way in.
+  let highlights = (record.highlights || []).map((h, i) => ({
+    id: h.id || h.cfi || `legacy-${h.created || i}`,
+    anchor: h.anchor || (h.cfi ? { cfi: h.cfi } : null),
+    text: h.text || '',
+    color: h.color,
+    created: h.created || Date.now(),
+  })).filter(h => h.anchor);
+
+  controller.syncHighlights?.(highlights);
 
   async function persist() {
     await db.patch(record.id, { highlights });
@@ -119,28 +129,33 @@ export async function openBook(record, container, hooks = {}) {
 
     highlights: () => highlights,
 
-    async addHighlight(cfi, text, color) {
-      if (highlights.some(h => h.cfi === cfi)) return;
-      const highlight = { cfi, text, color, created: Date.now() };
+    // Whatever the engine last saw selected, or null. Asked for by the toolbar
+    // button rather than read live, because tapping the toolbar is itself
+    // enough to collapse the selection.
+    captureSelection: () => controller.captureSelection?.() || null,
+
+    async addHighlight(anchor, text, color) {
+      if (!anchor) return null;
+      const highlight = {
+        id: `h${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`,
+        anchor, text, color, created: Date.now(),
+      };
       highlights = [...highlights, highlight];
-      controller.addHighlight?.(highlight);
+      controller.syncHighlights?.(highlights);
+      controller.clearSelection?.();
+      await persist();
+      return highlight;
+    },
+
+    async removeHighlight(id) {
+      highlights = highlights.filter(h => h.id !== id);
+      controller.syncHighlights?.(highlights);
       await persist();
     },
 
-    async removeHighlight(cfi) {
-      highlights = highlights.filter(h => h.cfi !== cfi);
-      controller.removeHighlight?.(cfi);
-      await persist();
-    },
-
-    async recolorHighlight(cfi, color) {
-      const existing = highlights.find(h => h.cfi === cfi);
-      if (!existing) return;
-      // Redrawing is the only way to change an epub.js annotation's style.
-      controller.removeHighlight?.(cfi);
-      const updated = { ...existing, color };
-      highlights = highlights.map(h => (h.cfi === cfi ? updated : h));
-      controller.addHighlight?.(updated);
+    async recolorHighlight(id, color) {
+      highlights = highlights.map(h => (h.id === id ? { ...h, color } : h));
+      controller.syncHighlights?.(highlights);
       await persist();
     },
 

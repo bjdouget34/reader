@@ -47,7 +47,13 @@ export async function open(record, container, hooks) {
   const textLayerDiv = document.createElement('div');
   textLayerDiv.className = 'textLayer';
 
-  pageBox.append(canvas, textLayerDiv);
+  // Order matters: the canvas paints the page, the highlight boxes sit on top
+  // of it, and the invisible text layer sits on top of those so selection still
+  // works through them.
+  const hlLayer = document.createElement('div');
+  hlLayer.className = 'pdf-highlights';
+
+  pageBox.append(canvas, hlLayer, textLayerDiv);
   stage.append(pageBox);
   container.append(stage);
   const ctx = canvas.getContext('2d', { alpha: false });
@@ -128,6 +134,7 @@ export async function open(record, container, hooks) {
     }
 
     await renderTextLayer(pdfPage, cssViewport);
+    paintHighlights();
     pdfPage.cleanup();
 
     // Back to the top left of the new page. Leaving scrollLeft where it was
@@ -160,8 +167,88 @@ export async function open(record, container, hooks) {
     const next = clamp(n, 1, total);
     if (next === page) return;
     page = next;
+    forgetSelection();
     await render();
   }
+
+  // ------------------------------------------------------------- highlights
+  //
+  // A PDF has no markup to mark up, only glyphs at coordinates, so a highlight
+  // is stored as rectangles expressed as fractions of the page. Fractions
+  // rather than pixels: the same numbers then hold at any zoom, and the boxes
+  // are positioned in percentages so they need no recalculating.
+
+  let highlights = [];
+  let remembered = null;      // { anchor: { page, rects }, text }
+
+  function forgetSelection() {
+    remembered = null;
+    hooks.onSelectionAvailable?.(null);
+  }
+
+  function paintHighlights() {
+    hlLayer.textContent = '';
+    for (const h of highlights) {
+      if (h.anchor?.page !== page) continue;
+      for (const r of h.anchor.rects || []) {
+        const box = document.createElement('div');
+        box.className = 'pdf-highlight';
+        box.style.left = (r.x * 100) + '%';
+        box.style.top = (r.y * 100) + '%';
+        box.style.width = (r.w * 100) + '%';
+        box.style.height = (r.h * 100) + '%';
+        box.style.background = h.color;
+        hlLayer.append(box);
+      }
+    }
+  }
+
+  function syncHighlights(list) {
+    highlights = list || [];
+    paintHighlights();
+  }
+
+  // The boxes take no pointer events, so that selecting text through them still
+  // works. Which means a tap on one is found by arithmetic instead.
+  stage.addEventListener('click', (e) => {
+    const box = pageBox.getBoundingClientRect();
+    if (!box.width || !box.height) return;
+    const nx = (e.clientX - box.left) / box.width;
+    const ny = (e.clientY - box.top) / box.height;
+    const hit = highlights.find(h => h.anchor?.page === page
+      && (h.anchor.rects || []).some(r => nx >= r.x && nx <= r.x + r.w
+                                       && ny >= r.y && ny <= r.y + r.h));
+    if (hit) hooks.onHighlightClick?.({ id: hit.id, rect: null });
+  });
+
+  // Unlike the epub engine there is no iframe: the text layer lives in this
+  // document, so the selection is right here.
+  const onSelectionChange = () => {
+    const selection = document.getSelection();
+    const text = selection?.toString().trim();
+    if (!text || !selection.rangeCount) return;
+
+    const range = selection.getRangeAt(0);
+    if (!textLayerDiv.contains(range.startContainer)
+        && !textLayerDiv.contains(range.commonAncestorContainer)) return;
+
+    const box = pageBox.getBoundingClientRect();
+    if (!box.width || !box.height) return;
+
+    const rects = [...range.getClientRects()]
+      .filter(r => r.width > 1 && r.height > 1)
+      .map(r => ({
+        x: (r.left - box.left) / box.width,
+        y: (r.top - box.top) / box.height,
+        w: r.width / box.width,
+        h: r.height / box.height,
+      }));
+    if (!rects.length) return;
+
+    remembered = { anchor: { page, rects }, text };
+    hooks.onSelectionAvailable?.({ text });
+  };
+  document.addEventListener('selectionchange', onSelectionChange);
 
   const onKey = (e) => {
     // Arrow keys belong to whatever field has focus -- the search box, for one.
@@ -207,9 +294,14 @@ export async function open(record, container, hooks) {
   await render();
 
   return {
-    // Highlighting a PDF means drawing boxes over coordinates rather than
-    // marking up text, which is a different job. The UI hides the control.
-    capabilities: { highlights: false, search: true },
+    capabilities: { highlights: true, search: true },
+
+    captureSelection: () => remembered,
+    clearSelection() {
+      try { document.getSelection()?.removeAllRanges(); } catch { /* ignore */ }
+      forgetSelection();
+    },
+    syncHighlights,
 
     // One page at a time, using the same text pdf.js extracts for the
     // selectable layer. A scanned PDF has no text, so this correctly finds
@@ -293,6 +385,7 @@ export async function open(record, container, hooks) {
     destroy() {
       destroyed = true;
       document.removeEventListener('keydown', onKey);
+      document.removeEventListener('selectionchange', onSelectionChange);
       window.removeEventListener('resize', onResize);
       boxObserver.disconnect();
       stage.removeEventListener('touchstart', onTouchStart);

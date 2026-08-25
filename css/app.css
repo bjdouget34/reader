@@ -258,6 +258,12 @@ body[data-format="epub"] #viewer {
 .pdf-page { position: relative; flex: none; margin: 0 auto; box-shadow: var(--shadow); background: #fff; }
 .pdf-canvas { display: block; width: 100%; height: 100%; }
 
+/* Highlight boxes, placed in percentages so they hold at any zoom. They take
+   no pointer events, so text stays selectable through them -- a tap on one is
+   matched by arithmetic in the engine instead. */
+.pdf-highlights { position: absolute; inset: 0; pointer-events: none; }
+.pdf-highlight { position: absolute; opacity: .38; border-radius: 2px; }
+
 /* Only the canvas is theme-shifted. Filtering the parent would drag the text
    layer's selection highlight along with it. */
 :root[data-theme="dark"] .pdf-canvas { filter: invert(1) hue-rotate(180deg); }

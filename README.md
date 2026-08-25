@@ -42,12 +42,20 @@ library. The `node_modules` directory here exists solely to re-vendor pdf.js
 - **Selectable PDF text.** pdf.js draws an invisible text layer over the page
   image, aligned to the pixel, so you can select and copy. Scanned PDFs have no
   text in them, so there is nothing to select on those.
-- **EPUB highlights** in four colours. On a touch screen, press and hold to
-  select -- a quick tap is a page tap and never opens the colour bar. The bar
-  docks to the bottom of the screen on touch, clear of the platform's own
-  Copy / Share menu. Highlights are stored with the book, redrawn when you
-  reopen it, and listed in the Highlights panel -- tap one to jump straight to
-  it. Tap a highlight in the text to recolour or remove it.
+- **Highlights in four colours, for both formats.** Select text however your
+  device likes, then tap **✎ Highlight** in the toolbar; the colour bar docks to
+  the bottom of the screen, clear of the platform's own Copy / Share menu.
+  Nothing appears on its own: earlier versions tried to tell a page tap from a
+  deliberate press and Android kept reporting the gesture differently, so the
+  trigger is now a button and there is no gesture left to misread. Highlights
+  are stored with the book, redrawn when you reopen it, and listed in the
+  Highlights panel -- tap one to jump to it, or tap it in the text to recolour
+  or remove it.
+
+  An epub highlight is anchored by CFI, a pdf one by page plus rectangles
+  expressed as fractions of the page, so it holds at any zoom. A pdf highlight
+  is geometry rather than marked-up text, so it cannot be quite as precise at
+  the ends of a line.
 - **Search inside a book**, EPUB or PDF. `Ctrl+F` (or the Search button) opens
   the panel; results stream in as the scan runs, with the match highlighted in
   each excerpt and a page number for PDFs. Click a result to jump there.

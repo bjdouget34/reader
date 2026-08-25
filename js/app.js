@@ -16,7 +16,7 @@ let coverUrls = [];    // blob: URLs to revoke when the library re-renders
 let pending = null;    // text selected but not yet highlighted
 let editing = null;    // cfi of the highlight the toolbar is acting on
 let searching = null;  // AbortController for the search in flight
-let lastGesture = null; // last press the engine saw, for the debug readout
+let selectionText = null; // what the engine last saw selected
 
 // ------------------------------------------------------------------ library
 
@@ -181,6 +181,7 @@ async function openById(id) {
   $('#marks-list').textContent = '';
   resetSearch();
   hideNote();
+  selectionText = null;
   applyNavState({ canGoBack: false });
   // These stay disabled until we know the book actually has something to show.
   $('#toc-open').disabled = true;
@@ -197,21 +198,18 @@ async function openById(id) {
         $('#reader-progress').style.width = `${percent}%`;
         if (toc?.length && !tocBuilt) { buildToc(toc); tocBuilt = true; }
       },
-      onSelection: ({ cfi, text, rect }) => {
-        pending = { cfi, text };
-        editing = null;
-        showToolbar(rect, { canRemove: false });
+      // Nothing pops up on its own any more. The engine only reports whether
+      // something is selected, which is what enables the Highlight button.
+      onSelectionAvailable: (info) => {
+        selectionText = info?.text || null;
+        updateHighlightButton();
       },
-      onHighlightClick: ({ cfi, rect }) => {
+      onHighlightClick: ({ id, rect }) => {
         pending = null;
-        editing = cfi;
+        editing = id;
         showToolbar(rect, { canRemove: true });
       },
-      // Taps inside the book's iframe never reach this document, so the engine
-      // has to tell us when the selection went away.
-      onDismiss: hideToolbar,
       onHighlights: renderMarks,
-      onGesture: (info) => { lastGesture = info; },
       onNote: showNote,
       onNavState: applyNavState,
     });
@@ -221,6 +219,7 @@ async function openById(id) {
       ? 'Highlights'
       : 'Highlighting is epub-only for now';
     $('#search-open').disabled = !session.capabilities.search;
+    updateHighlightButton();
     renderMarks(session.highlights());
   } catch (err) {
     console.error(err);
@@ -293,10 +292,13 @@ function renderMarks(highlights = []) {
     swatch.style.background = h.color;
     const quote = document.createElement('span');
     quote.className = 'mark-text';
-    quote.textContent = h.text.length > 180 ? h.text.slice(0, 180) + '…' : h.text;
+    const where = h.anchor?.page ? `p. ${h.anchor.page} — ` : '';
+    quote.textContent = where + (h.text.length > 180 ? h.text.slice(0, 180) + '…' : h.text);
     jump.append(swatch, quote);
     jump.addEventListener('click', () => {
-      session?.goto(h.cfi);
+      // An epub highlight is addressed by CFI, a pdf one by page number.
+      const target = h.anchor?.cfi ?? (h.anchor?.page ? `page:${h.anchor.page}` : null);
+      if (target) session?.goto(target);
       closeDrawers();
     });
 
@@ -305,7 +307,7 @@ function renderMarks(highlights = []) {
     del.title = 'Delete highlight';
     del.setAttribute('aria-label', 'Delete highlight');
     del.textContent = '×';
-    del.addEventListener('click', () => session?.removeHighlight(h.cfi));
+    del.addEventListener('click', () => session?.removeHighlight(h.id));
 
     row.append(jump, del);
     list.append(row);
@@ -323,8 +325,10 @@ function buildSwatches() {
     btn.setAttribute('aria-label', `Highlight ${color.name}`);
     btn.addEventListener('click', async () => {
       if (editing) await session?.recolorHighlight(editing, color.value);
-      else if (pending) await session?.addHighlight(pending.cfi, pending.text, color.value);
+      else if (pending) await session?.addHighlight(pending.anchor, pending.text, color.value);
       hideToolbar();
+      selectionText = null;
+      updateHighlightButton();
     });
     holder.append(btn);
   }
@@ -337,8 +341,10 @@ function showToolbar(rect, { canRemove }) {
 
   // On a touch screen the platform puts its own Copy / Share / Select all menu
   // right beside the selection and wins any fight for that space. Dock ours to
-  // the bottom of the screen instead, where nothing else is competing.
-  if (window.matchMedia('(pointer: coarse)').matches) {
+  // the bottom of the screen instead, where nothing else is competing. Same
+  // when there is no rect to sit beside, which is the case when the toolbar
+  // button opened it rather than a selection.
+  if (!rect || window.matchMedia('(pointer: coarse)').matches) {
     bar.classList.add('docked');
     bar.style.top = '';
     bar.style.left = '';
@@ -470,6 +476,19 @@ function resultRow(hit, term) {
 
 // ------------------------------------------------------------- footnotes
 
+// Enabled only once there is something to act on, so the button itself tells
+// you whether the app can see your selection.
+function updateHighlightButton() {
+  const button = $('#hl-open');
+  const usable = !!session?.capabilities?.highlights;
+  button.disabled = !usable || !selectionText;
+  button.title = !usable
+    ? 'Highlighting is not available for this book'
+    : selectionText
+      ? `Highlight: "${selectionText.slice(0, 40)}${selectionText.length > 40 ? '…' : ''}"`
+      : 'Select some text first, then tap this';
+}
+
 function showNote({ html, truncated, target }) {
   hideToolbar();                     // both of these live at the foot of the screen
   $('#note-body').innerHTML = html;  // already stripped to inline tags by the engine
@@ -590,6 +609,20 @@ for (const [id, move] of [['#prev', 'prev'], ['#next', 'next'], ['#tap-prev', 'p
   });
 }
 
+// The explicit path to a highlight: select text however the platform likes,
+// then tap this. There is no gesture to detect, so nothing for the platform to
+// report differently than expected.
+$('#hl-open').addEventListener('click', () => {
+  const selection = session?.captureSelection?.();
+  if (!selection) {
+    status('Select some text first, then tap Highlight.');
+    return;
+  }
+  pending = selection;
+  editing = null;
+  showToolbar(null, { canRemove: false });
+});
+
 $('#toc-open').addEventListener('click', () => toggleDrawer('toc'));
 $('#marks-open').addEventListener('click', () => toggleDrawer('marks'));
 $('#search-open').addEventListener('click', () => toggleDrawer('search'));
@@ -707,9 +740,7 @@ function renderDebug() {
   if (canvas) out.push('canvas ' + box(canvas) + '  stagebox ' + box($('.pdf-stage')));
 
   out.push('bar ' + box($('.reader-bar')) + '  chrome ' + (document.body.dataset.chrome || '-'));
-  if (lastGesture) {
-    out.push('press ' + lastGesture.heldMs + 'ms  armed=' + (lastGesture.armed ? 'yes' : 'no'));
-  }
+  out.push('sel  ' + (selectionText ? '"' + selectionText.slice(0, 24) + '"' : 'none'));
   $('#debug').textContent = out.join('\n');
 }
 
