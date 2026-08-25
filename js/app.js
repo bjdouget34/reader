@@ -671,7 +671,12 @@ function renderDebug() {
   out.push('win  ' + window.innerWidth + 'x' + window.innerHeight
     + '  doc ' + document.documentElement.clientWidth + 'x' + document.documentElement.clientHeight);
   out.push('vis  ' + (vv ? Math.round(vv.width) + 'x' + Math.round(vv.height) + ' @' + vv.scale.toFixed(2) : 'n/a')
-    + '  dpr ' + (window.devicePixelRatio || 1));
+    + '  dpr ' + (window.devicePixelRatio || 1).toFixed(2));
+  // Zoomed out, the document cannot fill what the browser is showing, and no
+  // amount of layout work inside the page will close that band.
+  if (vv && vv.scale < 0.99) {
+    out.push('!! PAGE ZOOMED OUT to ' + Math.round(vv.scale * 100) + '% -- pinch back to 100%');
+  }
 
   const stage = $('.stage');
   const viewer = $('#viewer');

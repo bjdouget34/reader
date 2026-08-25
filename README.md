@@ -129,6 +129,22 @@ A few starting points, roughly easiest first:
 - **Sync between devices.** The honest answer is that this needs a server, and
   it is a much bigger job than everything above.
 
+## If the page does not fill the screen
+
+Check the browser's zoom before suspecting the layout. Open the app with
+`?debug` in the URL: it prints the window, document and visual viewport sizes,
+and warns outright when the page is zoomed below 100%.
+
+A page pinched to 90% is sized to the layout viewport while the browser shows
+the larger visual viewport, and the difference appears as a band down the right
+and bottom with nothing in it -- which looks exactly like a layout bug and
+cannot be fixed by any amount of layout work inside the page. `minimum-scale=1`
+in the viewport meta prevents the pinch-out; zooming in is still allowed.
+
+The `SHORT` line in the debug readout is the honest test of the app's own
+layout: it is how far the book's page falls short of the box it should fill,
+and both figures should be 0.
+
 ## Where the theme lives
 
 The theme attribute goes on `<html>`, and the tokens are declared on

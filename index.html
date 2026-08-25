@@ -2,7 +2,11 @@
 <html lang="en" data-theme="light">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<!-- minimum-scale=1 stops the page being pinched below 100%. Zoomed out, the
+     document is sized to the layout viewport while the browser shows the larger
+     visual viewport, and the difference appears as a band down the right and
+     bottom with nothing in it. Zooming in is deliberately still allowed. -->
+<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, viewport-fit=cover">
 <title>Reader</title>
 <meta name="theme-color" content="#ffffff">
 <link rel="manifest" href="manifest.webmanifest">
