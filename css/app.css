@@ -212,12 +212,36 @@ body.dropping::after {
 
 .stage { position: relative; flex: 1; min-height: 0; overflow: hidden; }
 
-/* Full width, as it was. The side margins you see come from the book's own
-   stylesheet. If you ever want the text pulled in from the screen edges, give
-   this rule a left/right inset instead of `inset: 0` -- do not pad the book's
-   markup, because epub.js pins the CSS column width to the full width of this
-   element and padding inside the book pushes the text back into overflow. */
 #viewer { position: absolute; inset: 0; }
+
+/* Reading margins.
+   
+   The inset goes here, on the box epub.js renders into, and never on the
+   book's own markup: epub.js pins the CSS column width to the full width of
+   whatever element it is handed, so padding inside the book pushes the text
+   straight back into overflow, and per-element padding lands differently in
+   every book depending on how its chapters are nested.
+
+   Whole pixels at a few breakpoints rather than a percentage. A percentage
+   leaves the column a fractional width, and epub.js paginates by scrolling a
+   column at a time -- the rounding then drifts a fraction of a pixel per page
+   turn, which is exactly the class of fault that produced a 64px gap earlier.
+   These are the numbers to change if you want it tighter or airier.
+
+   PDFs are left alone. A PDF page carries its own printed margins, and insetting
+   it again would only shrink the page inside its own white space. */
+body[data-format="epub"] #viewer {
+  left: 28px;
+  right: 28px;
+  top: 10px;
+  bottom: 10px;
+}
+@media (min-width: 700px) {
+  body[data-format="epub"] #viewer { left: 44px; right: 44px; }
+}
+@media (min-width: 1100px) {
+  body[data-format="epub"] #viewer { left: 72px; right: 72px; }
+}
 
 /* pdf.js paints into a canvas we scroll; epub.js manages its own iframe. */
 /* Centred with auto margins rather than justify-content, deliberately. With

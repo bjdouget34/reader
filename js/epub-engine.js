@@ -13,9 +13,26 @@ import { loadSettings, saveSettings, THEMES } from './settings.js';
 export async function open(record, container, hooks) {
   const book = ePub(record.file);
 
+  // Whole pixels, always. A viewport can be a fractional number of CSS pixels
+  // -- 601.6 on the tablet this was chased on -- and epub.js paginates by
+  // scrolling exactly one column width at a time. Handed '100%' it rounds the
+  // column up to 602 while the box is 601.6, and every page turn slides a
+  // further 0.4px out of true: barely visible on page one, a sliver of the next
+  // column by the end of a long chapter. Flooring costs a sub-pixel strip at
+  // the edge and never accumulates.
+  const boxSize = () => {
+    const r = container.getBoundingClientRect();
+    return {
+      width: Math.max(1, Math.floor(r.width)),
+      height: Math.max(1, Math.floor(r.height)),
+    };
+  };
+
+  const initial = boxSize();
+
   const rendition = book.renderTo(container, {
-    width: '100%',
-    height: '100%',
+    width: initial.width,
+    height: initial.height,
     flow: 'paginated',
     spread: 'none',
     allowScriptedContent: false,
@@ -200,7 +217,12 @@ export async function open(record, container, hooks) {
   document.addEventListener('keydown', onKey);
   rendition.on('keydown', onKey);
 
-  const onResize = debounce(() => { try { rendition.resize(); } catch { /* mid-teardown */ } }, 150);
+  const onResize = debounce(() => {
+    try {
+      const { width, height } = boxSize();
+      rendition.resize(width, height);
+    } catch { /* mid-teardown */ }
+  }, 150);
   window.addEventListener('resize', onResize);
 
   // Collapsing the toolbar changes the height of the box we render into
@@ -398,7 +420,12 @@ export async function open(record, container, hooks) {
 
     // Belt and braces beside the ResizeObserver: something that changes the
     // size of the reading area can say so outright.
-    relayout() { try { rendition.resize(); } catch { /* mid-teardown */ } },
+    relayout() {
+      try {
+        const { width, height } = boxSize();
+        rendition.resize(width, height);
+      } catch { /* mid-teardown */ }
+    },
 
     // Walk the spine a section at a time. Each section has to be parsed to be
     // searched, so results are reported in batches as they arrive rather than

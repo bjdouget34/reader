@@ -140,6 +140,14 @@ of empty background down the right and bottom. It looks exactly like a layout
 bug and no layout work inside the page can close it. Anything added to that
 toolbar should be checked at 600px wide.
 
+Reading margins are an inset on `#viewer` in `css/app.css` -- 28px a side,
+44px from 700px wide, 72px from 1100px -- and they apply to EPUB only, since a
+PDF page carries its own printed margins. Whole pixels at breakpoints rather
+than a percentage: epub.js paginates by scrolling one column at a time, and a
+fractional column width means the rounding drifts a fraction of a pixel per
+page turn. For the same reason the engine floors the box it hands epub.js, so
+the column always fits inside the box rather than being rounded up past it.
+
 The collapse control is pinned to the top right rather than flowed with the
 rest of the toolbar, and sits in the same place whether the bar is open or
 shut. In the flow it would move to wherever the last wrapped row happened to
