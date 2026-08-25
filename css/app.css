@@ -1,5 +1,12 @@
 /* Theme tokens. Everything else reads from these, so a new theme is a new
-   block here plus a button in index.html and an entry in settings.js. */
+   block here plus an entry in THEMES in js/settings.js.
+
+   These sit on the root element, not on body, and that matters. `html` also
+   paints `var(--bg)`, so with the tokens declared on body the root resolved
+   --bg from the default block and stayed white in every theme. Body normally
+   covers it, but on Android the visual viewport does not always match what
+   `height: 100%` resolves against, and the white root showed through down the
+   right and bottom edges -- behind the toolbar too. */
 :root {
   --bg: #ffffff;
   --fg: #1a1a1a;
@@ -10,26 +17,26 @@
   --accent-fg: #ffffff;
   --shadow: 0 1px 3px rgba(0, 0, 0, .1), 0 8px 24px rgba(0, 0, 0, .06);
 }
-body[data-theme="sepia"] {
+:root[data-theme="sepia"] {
   --bg: #f4ecd8; --fg: #3a3128; --muted: #7c6f5c; --line: #e0d5bc;
   --panel: #efe5cd; --accent: #7a5c33; --accent-fg: #fdf8ee;
 }
-body[data-theme="dark"] {
+:root[data-theme="dark"] {
   --bg: #151515; --fg: #c9c9c9; --muted: #8a8a8a; --line: #2c2c2c;
   --panel: #1d1d1d; --accent: #6f9f83; --accent-fg: #10201a;
   --shadow: 0 1px 3px rgba(0, 0, 0, .5), 0 8px 24px rgba(0, 0, 0, .35);
 }
-body[data-theme="night"] {
+:root[data-theme="night"] {
   --bg: #0b0b0b; --fg: #d8a94e; --muted: #8a6f34; --line: #2a2114;
   --panel: #141008; --accent: #d8a94e; --accent-fg: #171104;
   --shadow: 0 1px 3px rgba(0, 0, 0, .6), 0 8px 24px rgba(0, 0, 0, .4);
 }
-body[data-theme="green"] {
+:root[data-theme="green"] {
   --bg: #000000; --fg: #45de6c; --muted: #2c8a45; --line: #12331c;
   --panel: #061007; --accent: #45de6c; --accent-fg: #001005;
   --shadow: 0 1px 3px rgba(0, 0, 0, .7), 0 8px 24px rgba(0, 0, 0, .5);
 }
-body[data-theme="contrast"] {
+:root[data-theme="contrast"] {
   --bg: #000000; --fg: #ffffff; --muted: #b0b0b0; --line: #3a3a3a;
   --panel: #0d0d0d; --accent: #ffffff; --accent-fg: #000000;
   --shadow: 0 1px 3px rgba(0, 0, 0, .7), 0 8px 24px rgba(0, 0, 0, .5);
@@ -37,8 +44,13 @@ body[data-theme="contrast"] {
 
 * { box-sizing: border-box; }
 
-html, body {
+html {
   height: 100%;
+  background: var(--bg);
+}
+
+body {
+  min-height: 100%;
   margin: 0;
   background: var(--bg);
   color: var(--fg);
@@ -210,18 +222,18 @@ body.dropping::after {
 
 /* Only the canvas is theme-shifted. Filtering the parent would drag the text
    layer's selection highlight along with it. */
-body[data-theme="dark"] .pdf-canvas { filter: invert(1) hue-rotate(180deg); }
-body[data-theme="sepia"] .pdf-canvas { filter: sepia(.32) saturate(.92) brightness(.98); }
+:root[data-theme="dark"] .pdf-canvas { filter: invert(1) hue-rotate(180deg); }
+:root[data-theme="sepia"] .pdf-canvas { filter: sepia(.32) saturate(.92) brightness(.98); }
 /* A page image cannot be recoloured properly, only filtered, so these are
    approximations of the matching text themes rather than exact matches. */
-body[data-theme="contrast"] .pdf-canvas { filter: invert(1); }
-body[data-theme="night"] .pdf-canvas { filter: invert(1) sepia(.55) saturate(1.7) hue-rotate(-12deg); }
-body[data-theme="green"] .pdf-canvas { filter: invert(1) sepia(1) hue-rotate(68deg) saturate(2.4); }
+:root[data-theme="contrast"] .pdf-canvas { filter: invert(1); }
+:root[data-theme="night"] .pdf-canvas { filter: invert(1) sepia(.55) saturate(1.7) hue-rotate(-12deg); }
+:root[data-theme="green"] .pdf-canvas { filter: invert(1) sepia(1) hue-rotate(68deg) saturate(2.4); }
 
 /* The text layer's spans are transparent, so selection is the only thing the
    reader ever sees of it. */
 .textLayer ::selection { background: rgba(90, 150, 255, .38); }
-body[data-theme="dark"] .textLayer ::selection { background: rgba(120, 180, 255, .42); }
+:root[data-theme="dark"] .textLayer ::selection { background: rgba(120, 180, 255, .42); }
 
 .arrow {
   position: absolute; top: 50%; transform: translateY(-50%);

@@ -516,7 +516,9 @@ function buildThemePicker() {
 function applyTheme() {
   const { theme } = loadSettings();
   const known = THEMES[theme] ? theme : 'light';
-  document.body.dataset.theme = known;
+  // On the root element: `html` paints the page background, and it has to be
+  // able to resolve the theme's own tokens.
+  document.documentElement.dataset.theme = known;
   $('#theme').value = known;
 }
 

@@ -129,6 +129,17 @@ A few starting points, roughly easiest first:
 - **Sync between devices.** The honest answer is that this needs a server, and
   it is a much bigger job than everything above.
 
+## Where the theme lives
+
+The theme attribute goes on `<html>`, and the tokens are declared on
+`:root[data-theme="…"]`, not on `body`. That is load-bearing rather than
+stylistic: `html` paints `var(--bg)` too, and with the tokens on `body` the
+root resolved `--bg` from the default block and stayed white in every theme.
+Body normally covers it, so a desktop browser never shows it -- but on Android
+the visual viewport does not always match what `height: 100%` resolves against,
+and that white root showed through down the right and bottom edges, behind the
+toolbar as well. It read as a layout bug for a long time.
+
 ## Touch and hover
 
 Every `:hover` style lives inside a single `@media (hover: hover)` block near
