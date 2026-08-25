@@ -661,6 +661,25 @@ applyChrome();
 show('library');
 renderLibrary();
 
+// Updating a page that installs itself is genuinely awkward: the browser can
+// hold an old copy, the service worker can hold another, and neither is
+// obviously in charge. So rather than leaving it to a well-timed refresh, make
+// it a thing you can press.
+$('#check-update').addEventListener('click', async () => {
+  const button = $('#check-update');
+  button.disabled = true;
+  button.textContent = 'checking…';
+  try {
+    const registration = await navigator.serviceWorker?.getRegistration();
+    await registration?.update();
+  } catch (err) {
+    console.warn('update check failed', err);
+  }
+  // A new worker taking over reloads us through controllerchange. If there is
+  // no new version, reload anyway: it costs a second and removes all doubt.
+  setTimeout(() => window.location.reload(), 1200);
+});
+
 if ('serviceWorker' in navigator) {
   // updateViaCache: 'none' keeps the browser from serving sw.js itself out of
   // its HTTP cache, which on a host with max-age would delay every update.
