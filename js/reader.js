@@ -93,6 +93,7 @@ export async function openBook(record, container, hooks = {}) {
     onSelection: (selection) => hooks.onSelection?.(selection),
     onHighlightClick: (info) => hooks.onHighlightClick?.(info),
     onDismiss: () => hooks.onDismiss?.(),
+    onGesture: (info) => hooks.onGesture?.(info),
     onNote: (note) => hooks.onNote?.(note),
     onNavState: (state) => hooks.onNavState?.(state),
   }), OPEN_TIMEOUT_MS, 'This book took too long to open. Try again.');

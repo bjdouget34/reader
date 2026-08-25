@@ -72,10 +72,25 @@ export async function open(record, container, hooks) {
   // the way gets thrown away.
   const LONG_PRESS_MS = 350;
 
-  // Selection events are only honoured once a deliberate press has armed them.
-  // This is what stops a plain tap from popping the highlight bar, and it stays
-  // armed while the selection handles are dragged around.
+  // Selection events are only honoured after a deliberate press. This is what
+  // stops a plain tap from popping the highlight bar. The press state lives out
+  // here rather than in the content hook because the 'selected' handler below
+  // needs to read it as well.
   let selectionArmed = false;
+  let pressedAt = 0;
+  let pressedWith = 'mouse';
+  let pointerIsDown = false;
+  let lastPressMs = 0;
+
+  // Was the press that produced this selection a deliberate one? A mouse drag
+  // always counts. Touch has to be held. If the finger is still down -- which is
+  // the usual case while the platform is building its selection -- measure from
+  // when it went down rather than waiting for an end that may never come.
+  function pressWasDeliberate() {
+    if (pressedWith !== 'touch') return true;
+    const heldMs = pointerIsDown ? Date.now() - pressedAt : lastPressMs;
+    return heldMs >= LONG_PRESS_MS;
+  }
 
   function clearSelection() {
     try { rendition.getContents()[0]?.window.getSelection()?.removeAllRanges(); } catch { /* ignore */ }
@@ -95,7 +110,7 @@ export async function open(record, container, hooks) {
   // loads, because the text lives in an iframe we do not otherwise touch.
   rendition.hooks.content.register((contents) => {
     const doc = contents.document;
-    let x0 = null, y0 = null, pressedAt = 0, pressedWith = 'mouse', pointerIsDown = false;
+    let x0 = null, y0 = null;
 
     doc.addEventListener('pointerdown', (e) => {
       pointerIsDown = true;
@@ -105,15 +120,19 @@ export async function open(record, container, hooks) {
       hooks.onDismiss?.();
     }, { passive: true });
 
-    doc.addEventListener('pointerup', () => {
+    // pointercancel matters as much as pointerup here. Android ends a
+    // long-press-to-select by cancelling the pointer -- the browser takes the
+    // gesture over for its own selection handles and never sends an "up". Arming
+    // only on pointerup meant a deliberate press armed nothing at all, so the
+    // platform's Copy/Share menu appeared and the colour bar did not.
+    const endPress = () => {
       pointerIsDown = false;
-      const heldMs = Date.now() - pressedAt;
-      // A mouse drag is explicit enough on its own; touch has to be held.
-      // This stays set until the next pointerdown, so the brief empty selection
-      // the platform emits while it builds a long-press selection cannot
-      // disarm it on the way through.
-      selectionArmed = pressedWith !== 'touch' || heldMs >= LONG_PRESS_MS;
-    }, { passive: true });
+      lastPressMs = Date.now() - pressedAt;
+      selectionArmed = pressWasDeliberate();
+      hooks.onGesture?.({ heldMs: lastPressMs, armed: selectionArmed });
+    };
+    doc.addEventListener('pointerup', endPress, { passive: true });
+    doc.addEventListener('pointercancel', endPress, { passive: true });
 
     // Selection changes never reach the parent document, so both the dismissal
     // and the tap cleanup have to be handled in here.
@@ -127,7 +146,7 @@ export async function open(record, container, hooks) {
       // Undo it: an unwanted selection is what drags the page out of alignment
       // on the next turn. Only ever applies to touch, and only once the finger
       // is up, so a mouse drag-select is never interfered with.
-      if (!selectionArmed && !pointerIsDown && pressedWith === 'touch') {
+      if (!pressWasDeliberate() && !pointerIsDown && pressedWith === 'touch') {
         clearSelection();
       }
     });
@@ -284,8 +303,10 @@ export async function open(record, container, hooks) {
   }
 
   rendition.on('selected', (cfiRange, contents) => {
-    // A quick tap is a page tap, never a highlight gesture.
-    if (!selectionArmed) return;
+    // A quick tap is a page tap, never a highlight gesture. Asked afresh rather
+    // than trusting the flag, because on touch the selection often arrives while
+    // the finger is still down and no end event has run yet.
+    if (!selectionArmed && !pressWasDeliberate()) return;
     const text = contents.window.getSelection()?.toString().trim() || '';
     if (!text) return;
     hooks.onSelection?.({ cfi: cfiRange, text, rect: rectFor(cfiRange) });

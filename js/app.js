@@ -16,6 +16,7 @@ let coverUrls = [];    // blob: URLs to revoke when the library re-renders
 let pending = null;    // text selected but not yet highlighted
 let editing = null;    // cfi of the highlight the toolbar is acting on
 let searching = null;  // AbortController for the search in flight
+let lastGesture = null; // last press the engine saw, for the debug readout
 
 // ------------------------------------------------------------------ library
 
@@ -210,6 +211,7 @@ async function openById(id) {
       // has to tell us when the selection went away.
       onDismiss: hideToolbar,
       onHighlights: renderMarks,
+      onGesture: (info) => { lastGesture = info; },
       onNote: showNote,
       onNavState: applyNavState,
     });
@@ -705,6 +707,9 @@ function renderDebug() {
   if (canvas) out.push('canvas ' + box(canvas) + '  stagebox ' + box($('.pdf-stage')));
 
   out.push('bar ' + box($('.reader-bar')) + '  chrome ' + (document.body.dataset.chrome || '-'));
+  if (lastGesture) {
+    out.push('press ' + lastGesture.heldMs + 'ms  armed=' + (lastGesture.armed ? 'yes' : 'no'));
+  }
   $('#debug').textContent = out.join('\n');
 }
 
