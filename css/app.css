@@ -429,6 +429,19 @@ body[data-chrome="hidden"] .reader-bar { display: none; }
   box-shadow: var(--shadow);
 }
 
+/* ----------------------------------------------------------------- debug */
+
+#debug {
+  position: fixed; z-index: 90;
+  left: 4px; bottom: 4px; margin: 0;
+  padding: 6px 8px; border-radius: 6px;
+  background: rgba(0, 0, 0, .82);
+  color: #6f6;
+  font: 700 13px/1.35 ui-monospace, "Cascadia Mono", Consolas, monospace;
+  white-space: pre;
+  pointer-events: none;
+}
+
 /* ---------------------------------------------------------------- status */
 
 .status {

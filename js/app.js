@@ -6,6 +6,11 @@ import { loadSettings, saveSettings, HIGHLIGHT_COLORS, THEMES, BUILD } from './s
 
 const $ = (sel) => document.querySelector(sel);
 
+// ?debug in the URL puts the layout numbers on screen. Diagnosing a device you
+// cannot open a console on otherwise means guessing, and guessing has not gone
+// well.
+const DEBUG = new URLSearchParams(location.search).has('debug');
+
 let session = null;    // the open book's controller, or null
 let coverUrls = [];    // blob: URLs to revoke when the library re-renders
 let pending = null;    // text selected but not yet highlighted
@@ -651,6 +656,58 @@ document.addEventListener('keydown', (e) => {
 document.addEventListener('pointerdown', (e) => {
   if (!$('#hl-toolbar').hidden && !e.target.closest('#hl-toolbar')) hideToolbar();
 });
+
+// ------------------------------------------------------------------- debug
+
+function box(el) {
+  if (!el) return '--';
+  const r = el.getBoundingClientRect();
+  return Math.round(r.width) + 'x' + Math.round(r.height);
+}
+
+function renderDebug() {
+  const out = [];
+  const vv = window.visualViewport;
+  out.push('win  ' + window.innerWidth + 'x' + window.innerHeight
+    + '  doc ' + document.documentElement.clientWidth + 'x' + document.documentElement.clientHeight);
+  out.push('vis  ' + (vv ? Math.round(vv.width) + 'x' + Math.round(vv.height) + ' @' + vv.scale.toFixed(2) : 'n/a')
+    + '  dpr ' + (window.devicePixelRatio || 1));
+
+  const stage = $('.stage');
+  const viewer = $('#viewer');
+  out.push('stage ' + box(stage) + '  viewer ' + box(viewer));
+
+  const container = document.querySelector('#viewer .epub-container');
+  const iframe = document.querySelector('#viewer iframe');
+  if (container && iframe) {
+    out.push('cont ' + container.clientWidth + 'x' + container.clientHeight + '  frame ' + box(iframe));
+    try {
+      const cs = iframe.contentWindow.getComputedStyle(iframe.contentDocument.body);
+      out.push('book ' + parseInt(cs.width) + 'x' + parseInt(cs.height)
+        + '  col ' + parseInt(cs.columnWidth) + '+' + parseInt(cs.columnGap));
+    } catch { out.push('book  (cross-origin)'); }
+    // The two numbers that matter: how far the book's own page falls short of
+    // the box it is meant to fill. Both should be 0. The iframe is deliberately
+    // many pages wide, so its width is not compared directly.
+    try {
+      const cs = iframe.contentWindow.getComputedStyle(iframe.contentDocument.body);
+      out.push('SHORT w=' + (container.clientWidth - parseInt(cs.width))
+        + '  h=' + (container.clientHeight - Math.round(iframe.getBoundingClientRect().height)));
+    } catch { /* ignore */ }
+  }
+
+  const canvas = document.querySelector('.pdf-canvas');
+  if (canvas) out.push('canvas ' + box(canvas) + '  stagebox ' + box($('.pdf-stage')));
+
+  out.push('bar ' + box($('.reader-bar')) + '  chrome ' + (document.body.dataset.chrome || '-'));
+  $('#debug').textContent = out.join('\n');
+}
+
+if (DEBUG) {
+  $('#debug').hidden = false;
+  setInterval(renderDebug, 400);
+  renderDebug();
+}
 
 // -------------------------------------------------------------------- start
 

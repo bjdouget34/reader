@@ -135,6 +135,10 @@
 
 <p id="status" class="status" hidden></p>
 
+<!-- Only with ?debug in the URL. Reading these numbers off a photograph is
+     far quicker than guessing at someone else's device. -->
+<pre id="debug" hidden></pre>
+
 <!-- epub.js is a classic script and expects JSZip as a global, so both load
      the old-fashioned way. pdf.js is a module and is imported on demand by
      js/pdf-engine.js, so opening an epub never downloads it. -->
