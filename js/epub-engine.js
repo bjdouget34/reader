@@ -9,6 +9,7 @@
 //                read", and slow enough on a long book that we cache it.
 
 import { loadSettings, saveSettings, THEMES } from './settings.js';
+import { makeTurnAnimator, clearTurnClasses } from './turn-animation.js';
 
 export async function open(record, container, hooks) {
   const book = ePub(record.file);
@@ -89,10 +90,16 @@ export async function open(record, container, hooks) {
   // moves between pages by setting the container's scrollLeft, and a live
   // selection makes the browser scroll to keep it on screen -- which lands
   // between two columns and shows as a gap down one side of the page.
+  // Animating the element rather than the scroll means a turn looks the same
+  // whether it scrolls within a chapter or renders the next one.
+  const animateTurn = makeTurnAnimator(container);
+
   function turn(direction) {
     clearSelection();
     forgetSelection();
-    return direction === 'next' ? rendition.next() : rendition.prev();
+    return animateTurn(direction, () => (
+      direction === 'next' ? rendition.next() : rendition.prev()
+    ));
   }
 
   // Touch and selection handling, registered inside each chapter document as it
@@ -515,6 +522,7 @@ export async function open(record, container, hooks) {
     },
 
     destroy() {
+      clearTurnClasses(container);
       clearTimeout(settleTimer);
       document.removeEventListener('keydown', onKey);
       window.removeEventListener('resize', onResize);

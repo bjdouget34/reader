@@ -61,11 +61,12 @@ library. The `node_modules` directory here exists solely to re-vendor pdf.js
   each excerpt and a page number for PDFs. Click a result to jump there.
   Closing the panel cancels a scan in progress.
 - Page turns: click the arrows, press the arrow keys, or swipe / tap the left
-  and right edges on a touch screen. They are animated -- an epub slides,
-  since paginating one is a scroll and the scroll can simply be asked to
-  animate; a pdf drifts out and settles back from the far side, since its page
-  is re-rendered rather than scrolled. Both sit behind
-  `prefers-reduced-motion`, so a device asking for less movement gets none.
+  and right edges on a touch screen. Every turn is animated -- the page drifts
+  out against the direction of travel and settles back from the far side. The
+  motion is deliberately not built on `scroll-behavior: smooth`; see
+  `js/turn-animation.js` for why that only worked on about half the turns.
+  Behind `prefers-reduced-motion`, so a device asking for less movement gets
+  none.
 - `Esc` closes the toolbar, then the drawers, then returns to the library.
 
 ## Putting it on a tablet
@@ -111,6 +112,7 @@ If registration fails, the console message says why.
 | `serve.js` | The local server |
 | `tools/make-icons.js` | Regenerates the app icons |
 | `lib/` | Vendored epub.js, JSZip, pdf.js. Committed on purpose |
+| `js/turn-animation.js` | Page-turn motion, shared by both engines |
 | `lib/pdf-textlayer.css` | Text layer rules copied from pdf.js. Do not hand-edit |
 
 Both engines expose the same shape — `next`, `prev`, `goto`, `setTheme`,

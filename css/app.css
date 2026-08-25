@@ -243,26 +243,24 @@ body[data-format="epub"] #viewer {
   body[data-format="epub"] #viewer { left: 72px; right: 72px; }
 }
 
-/* Page-turn motion.
+/* Page-turn motion. Applied to whichever element the engine hands the animator
+   -- the epub viewer or the pdf page box -- so a scroll, a new chapter and a
+   re-rendered pdf page all animate the same way. See js/turn-animation.js for
+   why this no longer relies on `scroll-behavior: smooth`.
 
-   An epub paginates by scrolling one column, so asking the container to scroll
-   smoothly is the whole animation: the text slides across exactly as far as a
-   page. Verified that turns still land flush on a column boundary, which is
-   the thing that matters.
-
-   Both are behind a motion query. Someone who has asked their device for less
-   movement has asked for it here too. */
+   Behind a motion query: someone who has asked their device for less movement
+   has asked for it here too. */
 @media (prefers-reduced-motion: no-preference) {
-  #viewer .epub-container { scroll-behavior: smooth; }
+  .turning { transition: transform 150ms ease-out, opacity 150ms ease-out; }
 
-  .pdf-page { transition: transform 150ms ease-out, opacity 150ms ease-out; }
   /* Leaving: drift out against the direction of travel. */
-  .pdf-page.leave-next { transform: translateX(-7%); opacity: 0; }
-  .pdf-page.leave-prev { transform: translateX(7%); opacity: 0; }
-  /* Arriving: jump to the far side with no transition, then let removing the
-     class animate it home. */
-  .pdf-page.enter-next { transform: translateX(7%); opacity: 0; transition: none; }
-  .pdf-page.enter-prev { transform: translateX(-7%); opacity: 0; transition: none; }
+  .leave-next { transform: translateX(-7%); opacity: 0; }
+  .leave-prev { transform: translateX(7%); opacity: 0; }
+
+  /* Arriving: jump to the far side untransitioned, then let removing the class
+     animate it home. */
+  .enter-next { transform: translateX(7%); opacity: 0; transition: none; }
+  .enter-prev { transform: translateX(-7%); opacity: 0; transition: none; }
 }
 
 /* pdf.js paints into a canvas we scroll; epub.js manages its own iframe. */
