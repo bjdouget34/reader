@@ -67,6 +67,13 @@ body { display: flex; flex-direction: column; }
 .bar {
   display: flex;
   align-items: center;
+  /* Wrapping is load-bearing, not cosmetic. On a narrow screen this row's
+     contents need more width than the screen has, and a document wider than
+     the viewport makes Android Chrome shrink the whole page to fit -- which
+     showed up as a band of empty background down the right and bottom, looking
+     for all the world like a layout bug. Wrapping keeps the document inside
+     the viewport, so the page stays at 100%. */
+  flex-wrap: wrap;
   gap: 8px;
   padding: 10px max(14px, env(safe-area-inset-right)) 10px max(14px, env(safe-area-inset-left));
   padding-top: max(10px, env(safe-area-inset-top));
@@ -462,6 +469,11 @@ body[data-chrome="hidden"] .reader-bar { display: none; }
   .grid { grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 18px 14px; padding: 16px; }
   .bar { gap: 5px; padding-left: 10px; padding-right: 10px; }
   .bar button { padding: 7px 8px; }
+  /* Trim the widest pieces so the row has a chance of staying on one line
+     before wrapping takes over. */
+  .bar > * { min-width: 0; }
+  .picker { max-width: 8.5em; padding: 7px 4px; }
+  .readout { min-width: 34px; }
 }
 
 /* --------------------------------------------------------- hover, if any

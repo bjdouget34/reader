@@ -5,7 +5,7 @@ const KEY = 'my-reader:settings';
 
 // Shown in the library footer so "is the tablet actually running the new
 // code?" is answerable at a glance. Bump it together with CACHE in sw.js.
-export const BUILD = 'v8';
+export const BUILD = 'v9';
 
 const DEFAULTS = {
   theme: 'light',       // a key of THEMES below

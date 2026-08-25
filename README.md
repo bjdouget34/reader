@@ -131,6 +131,15 @@ A few starting points, roughly easiest first:
 
 ## If the page does not fill the screen
 
+The toolbar wraps (`flex-wrap: wrap` on `.bar`) and that is load-bearing. On a
+narrow screen its contents need more width than the screen has, and a document
+wider than the viewport makes Android Chrome shrink the whole page to fit. The
+page then sits at 90%, the document is sized to the layout viewport while the
+browser shows the larger visual viewport, and the difference appears as a band
+of empty background down the right and bottom. It looks exactly like a layout
+bug and no layout work inside the page can close it. Anything added to that
+toolbar should be checked at 600px wide.
+
 Check the browser's zoom before suspecting the layout. Open the app with
 `?debug` in the URL: it prints the window, document and visual viewport sizes,
 and warns outright when the page is zoomed below 100%.
