@@ -140,6 +140,13 @@ of empty background down the right and bottom. It looks exactly like a layout
 bug and no layout work inside the page can close it. Anything added to that
 toolbar should be checked at 600px wide.
 
+The collapse control is pinned to the top right rather than flowed with the
+rest of the toolbar, and sits in the same place whether the bar is open or
+shut. In the flow it would move to wherever the last wrapped row happened to
+finish, and move again every time a button was added. `.bar.reader-bar` keeps a
+padding-right clear for it -- written with that specificity so the
+narrow-screen block cannot override it on source order.
+
 Check the browser's zoom before suspecting the layout. Open the app with
 `?debug` in the URL: it prints the window, document and visual viewport sizes,
 and warns outright when the page is zoomed below 100%.

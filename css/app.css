@@ -60,6 +60,8 @@ body {
 
 body { display: flex; flex-direction: column; }
 #library-view, #reader-view { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+/* Positioning context for the pinned toolbar toggle. */
+#reader-view { position: relative; }
 [hidden] { display: none !important; }
 
 /* ------------------------------------------------------------------ bars */
@@ -383,14 +385,26 @@ body.dropping::after {
 
 body[data-chrome="hidden"] .reader-bar { display: none; }
 
-.chrome-toggle { padding: 7px 9px; line-height: 1; }
-
+/* Both halves of the toggle are pinned to the same spot rather than flowed
+   with the rest of the toolbar. Once the bar wraps, a control in the flow ends
+   up wherever the last row happens to finish -- and it moves again every time
+   a button is added. This one belongs in the same place whether the toolbar is
+   open or shut, so it can be reached without looking for it. */
+#chrome-hide,
 #chrome-show {
   position: absolute; z-index: 30;
-  top: max(6px, env(safe-area-inset-top));
+  top: max(10px, env(safe-area-inset-top));
   right: max(10px, env(safe-area-inset-right));
   width: 44px; height: 30px; padding: 0;
   font-size: 15px; line-height: 1;
+}
+
+/* Keeps wrapped toolbar items from running underneath the pinned control.
+   Written as .bar.reader-bar so the narrow-screen block further down, which
+   sets a smaller padding on .bar, cannot win on source order. */
+.bar.reader-bar { padding-right: max(62px, calc(env(safe-area-inset-right) + 62px)); }
+
+#chrome-show {
   color: var(--muted);
   background: color-mix(in srgb, var(--panel) 88%, transparent);
   border-color: var(--line);
