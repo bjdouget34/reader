@@ -61,7 +61,11 @@ library. The `node_modules` directory here exists solely to re-vendor pdf.js
   each excerpt and a page number for PDFs. Click a result to jump there.
   Closing the panel cancels a scan in progress.
 - Page turns: click the arrows, press the arrow keys, or swipe / tap the left
-  and right edges on a touch screen.
+  and right edges on a touch screen. They are animated -- an epub slides,
+  since paginating one is a scroll and the scroll can simply be asked to
+  animate; a pdf drifts out and settles back from the far side, since its page
+  is re-rendered rather than scrolled. Both sit behind
+  `prefers-reduced-motion`, so a device asking for less movement gets none.
 - `Esc` closes the toolbar, then the drawers, then returns to the library.
 
 ## Putting it on a tablet

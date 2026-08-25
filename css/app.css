@@ -243,6 +243,28 @@ body[data-format="epub"] #viewer {
   body[data-format="epub"] #viewer { left: 72px; right: 72px; }
 }
 
+/* Page-turn motion.
+
+   An epub paginates by scrolling one column, so asking the container to scroll
+   smoothly is the whole animation: the text slides across exactly as far as a
+   page. Verified that turns still land flush on a column boundary, which is
+   the thing that matters.
+
+   Both are behind a motion query. Someone who has asked their device for less
+   movement has asked for it here too. */
+@media (prefers-reduced-motion: no-preference) {
+  #viewer .epub-container { scroll-behavior: smooth; }
+
+  .pdf-page { transition: transform 150ms ease-out, opacity 150ms ease-out; }
+  /* Leaving: drift out against the direction of travel. */
+  .pdf-page.leave-next { transform: translateX(-7%); opacity: 0; }
+  .pdf-page.leave-prev { transform: translateX(7%); opacity: 0; }
+  /* Arriving: jump to the far side with no transition, then let removing the
+     class animate it home. */
+  .pdf-page.enter-next { transform: translateX(7%); opacity: 0; transition: none; }
+  .pdf-page.enter-prev { transform: translateX(-7%); opacity: 0; transition: none; }
+}
+
 /* pdf.js paints into a canvas we scroll; epub.js manages its own iframe. */
 /* Centred with auto margins rather than justify-content, deliberately. With
    justify-content:center, a page wider than the stage overflows equally in both

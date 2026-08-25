@@ -163,12 +163,41 @@ export async function open(record, container, hooks) {
     }
   }
 
+  // A pdf page is re-rendered rather than scrolled, so there is nothing to
+  // animate on its own. Slide the old one out, swap it, and let it settle back
+  // from the far side -- which reads like the epub's scroll without needing two
+  // pages on screen at once.
+  const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)');
+
+  async function withTurnAnimation(direction, work) {
+    if (reducedMotion?.matches) return work();
+
+    const leaving = direction === 'next' ? 'leave-next' : 'leave-prev';
+    const arriving = direction === 'next' ? 'enter-next' : 'enter-prev';
+
+    pageBox.classList.add(leaving);
+    await new Promise(r => setTimeout(r, 150));
+    pageBox.classList.remove(leaving);
+
+    pageBox.classList.add(arriving);
+    try {
+      await work();
+    } finally {
+      // Two frames: one for the browser to take up the offset with no
+      // transition, the next for removing the class to animate it home.
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        pageBox.classList.remove(arriving);
+      }));
+    }
+  }
+
   async function show(n) {
     const next = clamp(n, 1, total);
     if (next === page) return;
+    const direction = next > page ? 'next' : 'prev';
     page = next;
     forgetSelection();
-    await render();
+    await withTurnAnimation(direction, () => render());
   }
 
   // ------------------------------------------------------------- highlights
@@ -390,6 +419,7 @@ export async function open(record, container, hooks) {
       boxObserver.disconnect();
       stage.removeEventListener('touchstart', onTouchStart);
       stage.removeEventListener('touchend', onTouchEnd);
+      pageBox.classList.remove('leave-next', 'leave-prev', 'enter-next', 'enter-prev');
       if (renderTask) { try { renderTask.cancel(); } catch { /* ignore */ } }
       if (textLayer) { try { textLayer.cancel(); } catch { /* ignore */ } }
       task.destroy().catch(() => {});

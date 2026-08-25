@@ -181,13 +181,33 @@ export async function open(record, container, hooks) {
     });
   }
 
-  rendition.on('relocated', (location) => {
-    position = location.start.cfi;
+  function noteLocation(cfi) {
+    if (!cfi) return;
+    position = cfi;
     if (book.locations.length()) {
-      const pct = book.locations.percentageFromCfi(position);
+      const pct = book.locations.percentageFromCfi(cfi);
       percent = Math.round((pct || 0) * 100);
     }
     report();
+  }
+
+  // The page turn is animated, which means epub.js can report a location while
+  // the scroll is still travelling -- a page or two behind where it will come to
+  // rest. Saving that would put you back there on reopening, so the location is
+  // read again once the movement has stopped, and it is that reading which
+  // sticks. Without this the animation quietly costs you your place.
+  let settleTimer = null;
+  rendition.on('relocated', (location) => {
+    noteLocation(location.start.cfi);
+
+    clearTimeout(settleTimer);
+    settleTimer = setTimeout(() => {
+      try {
+        const settled = rendition.currentLocation();
+        const cfi = settled?.start?.cfi;
+        if (cfi && cfi !== position) noteLocation(cfi);
+      } catch { /* mid-teardown */ }
+    }, 420);
   });
 
   // Keys work whether focus sits on the page or inside the book's iframe.
@@ -495,6 +515,7 @@ export async function open(record, container, hooks) {
     },
 
     destroy() {
+      clearTimeout(settleTimer);
       document.removeEventListener('keydown', onKey);
       window.removeEventListener('resize', onResize);
       boxObserver.disconnect();
