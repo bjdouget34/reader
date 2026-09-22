@@ -55,6 +55,7 @@
     <button id="hl-open" disabled title="Highlight the selected text">✎ Highlight</button>
     <button id="marks-open" disabled title="List of highlights">Highlights</button>
     <button id="search-open" disabled title="Search this book (Ctrl+F)">Search</button>
+    <button id="speed-open" disabled title="Speed read from this page">Speed read</button>
 
     <span class="group" role="group" aria-label="Size">
       <button id="smaller" title="Smaller">A−</button>
@@ -130,6 +131,35 @@
   </div>
 
   <div class="reader-progress-track"><span id="reader-progress"></span></div>
+</section>
+
+<!-- Speed reading: one word at a time, from wherever you are. Driven by
+     js/speed-read.js; the engines only supply the words. -->
+<section id="rsvp" hidden aria-label="Speed read" tabindex="-1">
+  <header class="rsvp-bar">
+    <button id="rsvp-done" title="Back to the page (Esc)">‹ Done</button>
+    <div class="spacer"></div>
+    <span id="rsvp-where" class="rsvp-where"></span>
+  </header>
+
+  <div id="rsvp-stage" class="rsvp-stage">
+    <div class="rsvp-frame">
+      <div class="rsvp-word"><span id="rsvp-pre"></span><span id="rsvp-pivot" class="rsvp-pivot"></span><span id="rsvp-post"></span></div>
+    </div>
+    <p id="rsvp-context" class="rsvp-context"></p>
+    <p id="rsvp-hint" class="rsvp-hint"></p>
+  </div>
+
+  <footer class="rsvp-controls">
+    <button id="rsvp-back" title="Back a sentence (←)" aria-label="Back a sentence">«</button>
+    <button id="rsvp-play" class="primary rsvp-play">Play</button>
+    <button id="rsvp-fwd" title="Forward a sentence (→)" aria-label="Forward a sentence">»</button>
+    <span class="group rsvp-speed" role="group" aria-label="Speed">
+      <button id="rsvp-slower" title="Slower (↓)" aria-label="Slower">−</button>
+      <span id="rsvp-wpm" class="readout">300 wpm</span>
+      <button id="rsvp-faster" title="Faster (↑)" aria-label="Faster">+</button>
+    </span>
+  </footer>
 </section>
 
 <!-- Appears over the text when you select something in an epub. -->

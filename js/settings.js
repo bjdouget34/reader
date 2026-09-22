@@ -5,13 +5,14 @@ const KEY = 'my-reader:settings';
 
 // Shown in the library footer so "is the tablet actually running the new
 // code?" is answerable at a glance. Bump it together with CACHE in sw.js.
-export const BUILD = 'v16';
+export const BUILD = 'v17';
 
 const DEFAULTS = {
   theme: 'light',       // a key of THEMES below
   fontSize: 100,        // epub text size, percent
   zoom: 100,            // pdf zoom, percent of fit-to-width
   chromeHidden: false,  // reading with the top toolbar collapsed
+  speedWpm: 300,        // speed reading, words per minute
 };
 
 export function loadSettings() {

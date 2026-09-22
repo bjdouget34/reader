@@ -519,6 +519,47 @@ export async function open(record, container, hooks) {
 
     relayout() { relayoutKeepingPlace(); },
 
+    // Words for speed reading, a page at a time, starting from the first line
+    // below the top of the screen. Each word remembers its page and how far
+    // down it sits, which is all it takes to scroll back to it.
+    async speedSource() {
+      const here = anchorNow();
+
+      async function load(n) {
+        let pdfPage;
+        try {
+          pdfPage = await doc.getPage(n);
+          const content = await pdfPage.getTextContent();
+          return { words: pdfWords(content.items, n, sizes[n - 1].h) };
+        } catch {
+          return { words: [] };
+        } finally {
+          // As in search: never clean up a page that is on screen.
+          if (pdfPage && !slots[n - 1].drawnKey && !slots[n - 1].wantKey) pdfPage.cleanup();
+        }
+      }
+
+      return {
+        first: 1,
+        last: total,
+        async start() {
+          // Image-only pages and a scan are skipped over, but not forever:
+          // a scanned PDF is nothing but image pages.
+          for (let n = here.page; n <= total && n < here.page + 25; n++) {
+            const chunk = await load(n);
+            const i = n === here.page
+              ? chunk.words.findIndex(w => w.y >= here.frac - 0.005)
+              : (chunk.words.length ? 0 : -1);
+            if (i >= 0) return { c: n, i, chunk };
+          }
+          return null;
+        },
+        load,
+        label: (n) => ({ text: `Page ${n} of ${total}` }),
+        goTo: async (word) => jumpTo(word.page, word.y),
+      };
+    },
+
     // There are no page turns in a scroll; these move a page at a time for
     // anything that still asks.
     next: () => jumpTo(anchorNow().page + 1),
@@ -571,6 +612,65 @@ export async function open(record, container, hooks) {
       stage.remove();
     },
   };
+}
+
+// A page's text as words in reading order, for speed reading.
+//
+// pdf.js hands text over as runs, which may be a whole line or a single letter,
+// so they are gathered into lines first -- a line ends where pdf.js says so or
+// where the baseline moves. Then:
+//   - a word hyphenated across a line break is joined back up ("exam-" "ple");
+//   - a line in the top or bottom margin that is only a number is dropped,
+//     since a page number flashed up between two sentences is noise;
+//   - a noticeably bigger gap between lines counts as a paragraph break.
+function pdfWords(items, page, pageHeight) {
+  const lines = [];
+  let line = null;
+  for (const item of items) {
+    if (typeof item.str !== 'string') continue;   // marked-content markers
+    const y = item.transform[5];
+    const h = Math.abs(item.transform[3]) || item.height || 0;
+    if (!line || Math.abs(line.y - y) > Math.max(2, h * 0.5)) {
+      line = { y, h, text: '' };
+      lines.push(line);
+    }
+    line.text += item.str;
+    line.h = Math.max(line.h, h);
+    if (item.hasEOL) line = null;
+  }
+
+  const words = [];
+  let previous = null;
+  let hyphenated = false;
+  for (const ln of lines) {
+    const text = ln.text.trim();
+    if (!text) continue;
+    // PDF coordinates run upwards, so the top of the line is its baseline plus
+    // its height, flipped.
+    const top = Math.min(1, Math.max(0, 1 - (ln.y + ln.h) / pageHeight));
+    if ((top < 0.08 || top > 0.92) && /^[\divxlcIVXLC\s.\-–—]+$/.test(text)) continue;
+
+    if (previous && words.length) {
+      const gap = previous.y - ln.y;
+      if (gap > Math.max(previous.h, ln.h) * 1.8) words[words.length - 1].para = true;
+    }
+
+    const joinFirst = hyphenated;
+    hyphenated = false;
+    const tokens = text.match(/\S+/g) || [];
+    tokens.forEach((t, k) => {
+      if (k === 0 && joinFirst && /^\p{Ll}/u.test(t)) {
+        const last = words[words.length - 1];
+        last.t = last.t.slice(0, -1) + t;
+        return;
+      }
+      words.push({ t, para: false, page, y: top });
+    });
+    const last = words[words.length - 1];
+    hyphenated = !!last && /\p{L}-$/u.test(last.t);
+    previous = ln;
+  }
+  return words;
 }
 
 // Where on its page an outline destination points, as a fraction from the top.

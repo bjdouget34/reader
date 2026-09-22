@@ -10,7 +10,7 @@
 //
 // Bump CACHE when you change the file list, or the old cache lingers.
 
-const CACHE = 'my-reader-v16';
+const CACHE = 'my-reader-v17';
 
 const CORE = [
   './',
@@ -24,6 +24,7 @@ const CORE = [
   'js/settings.js',
   'js/epub-engine.js',
   'js/turn-animation.js',
+  'js/speed-read.js',
   'js/pdf-engine.js',
   'lib/jszip.min.js',
   'lib/epub.min.js',

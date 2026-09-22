@@ -3,6 +3,7 @@
 import { db, fingerprint, usage } from './db.js';
 import { openBook, readMetadata, detectFormat, describeFileError } from './reader.js';
 import { loadSettings, saveSettings, HIGHLIGHT_COLORS, THEMES, BUILD } from './settings.js';
+import { openSpeedRead } from './speed-read.js';
 
 const $ = (sel) => document.querySelector(sel);
 
@@ -187,6 +188,7 @@ async function openById(id) {
   $('#toc-open').disabled = true;
   $('#marks-open').disabled = true;
   $('#search-open').disabled = true;
+  $('#speed-open').disabled = true;
   document.body.dataset.format = record.format;
   hideToolbar();
 
@@ -219,6 +221,7 @@ async function openById(id) {
       ? 'Highlights'
       : 'Highlighting is epub-only for now';
     $('#search-open').disabled = !session.capabilities.search;
+    $('#speed-open').disabled = !session.speedSource;
     updateHighlightButton();
     renderMarks(session.highlights());
   } catch (err) {
@@ -629,6 +632,17 @@ $('#hl-open').addEventListener('click', () => {
 $('#toc-open').addEventListener('click', () => toggleDrawer('toc'));
 $('#marks-open').addEventListener('click', () => toggleDrawer('marks'));
 $('#search-open').addEventListener('click', () => toggleDrawer('search'));
+
+// Speed reading covers the reader completely and hands the page back at the
+// word where it stopped. Panels and the highlight bar are closed first so none
+// of them is sitting there, stale, when it comes back.
+$('#speed-open').addEventListener('click', () => {
+  if (!session?.speedSource) return;
+  closeDrawers();
+  hideToolbar();
+  hideNote();
+  openSpeedRead(session);
+});
 
 $('#search-form').addEventListener('submit', (e) => {
   e.preventDefault();

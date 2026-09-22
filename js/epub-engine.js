@@ -188,6 +188,25 @@ export async function open(record, container, hooks) {
     });
   }
 
+  // Which chapter a section belongs to: the last contents entry at or before
+  // it. Built when asked for, since the contents do not change once open.
+  function chapterIndex() {
+    const entries = [];
+    for (const item of flattenToc(book.navigation?.toc || [])) {
+      const path = (item.href || '').split('#')[0];
+      const section = book.spine.get(path) || book.spine.get(item.href);
+      if (section && !entries.some(e => e.index === section.index)) {
+        entries.push({ index: section.index, label: item.label });
+      }
+    }
+    entries.sort((a, b) => a.index - b.index);
+    return (n) => {
+      let found = null;
+      for (const e of entries) { if (e.index <= n) found = e; else break; }
+      return found;
+    };
+  }
+
   function noteLocation(cfi) {
     if (!cfi) return;
     position = cfi;
@@ -500,6 +519,95 @@ export async function open(record, container, hooks) {
     },
 
 
+    // Words for speed reading, a section at a time. The section on screen is
+    // read from the rendered page itself, because that is the only copy that
+    // knows which words are on the current page; every other section is parsed
+    // off screen, the same way search does it.
+    async speedSource() {
+      const items = book.spine.spineItems;
+      const onScreen = rendition.currentLocation()?.start?.index
+        ?? rendition.location?.start?.index ?? 0;
+      const contents = rendition.getContents()[0];
+      const iframe = container.querySelector('iframe');
+      const scroller = container.querySelector('.epub-container') || container;
+      const chapters = chapterIndex();
+      // A contents list with a single entry -- this one's says only "Start" --
+      // names nothing useful, so the readout falls back on how far through the
+      // book you are.
+      const namedChapters = flattenToc(book.navigation?.toc || []).length > 1;
+
+      const cfiFor = (word) => {
+        const section = items[word.section];
+        if (!section) return null;
+        const range = word.node.ownerDocument.createRange();
+        range.setStart(word.node, word.start);
+        range.setEnd(word.node, word.end);
+        return section.cfiFromRange(range);
+      };
+
+      // Notes and other out-of-sequence sections are skipped, as the reader's
+      // own page turns skip them -- unless one is where you already are.
+      const inSequence = (section, n) =>
+        n === onScreen || (section.linear !== false && section.linear !== 'no');
+
+      async function load(n) {
+        const section = items[n];
+        if (!section || !inSequence(section, n)) return { words: [] };
+        if (n === onScreen && contents?.document) {
+          return { words: wordsFromDoc(contents.document, n) };
+        }
+        const wasLoaded = !!section.document;
+        if (!wasLoaded) await section.load(book.load.bind(book));
+        const doc = section.document;
+        const words = doc ? wordsFromDoc(doc, n) : [];
+        // The words keep the parsed document alive for as long as they need
+        // it, so the section can be let go at once, as search does.
+        if (!wasLoaded) { try { section.unload(); } catch { /* ignore */ } }
+        return { words };
+      }
+
+      return {
+        first: 0,
+        last: items.length - 1,
+        async start() {
+          const chunk = await load(onScreen);
+          if (chunk.words.length && iframe) {
+            const i = firstVisibleIndex(chunk.words, iframe, scroller.getBoundingClientRect());
+            return { c: onScreen, i, chunk };
+          }
+          // An image-only page: begin with the next section that has text.
+          for (let n = onScreen + 1; n < items.length && n < onScreen + 25; n++) {
+            const next = await load(n);
+            if (next.words.length) return { c: n, i: 0, chunk: next };
+          }
+          return null;
+        },
+        load,
+        label(n, word) {
+          const chapter = chapters(n);
+          let percent = null;
+          if (word && book.locations.length()) {
+            try {
+              const p = book.locations.percentageFromCfi(cfiFor(word));
+              if (Number.isFinite(p)) percent = Math.round(p * 100);
+            } catch { /* no percentage for this word */ }
+          }
+          return {
+            text: namedChapters ? (chapter?.label || '') : '',
+            // Minutes left only makes sense when the section is the whole
+            // chapter; when a chapter is split over several files it would be
+            // the time left in a piece of it.
+            timeLeft: namedChapters && chapter?.index === n,
+            percent,
+          };
+        },
+        async goTo(word) {
+          const cfi = cfiFor(word);
+          if (cfi) await rendition.display(cfi);
+        },
+      };
+    },
+
     next: () => turn('next'),
     prev: () => turn('prev'),
     goto: (href) => rendition.display(href),
@@ -565,6 +673,99 @@ function flattenToc(items, depth = 0, out = []) {
     if (item.subitems?.length) flattenToc(item.subitems, depth + 1, out);
   }
   return out;
+}
+
+// ------------------------------------------------------------ speed reading
+//
+// A section's words in reading order, each remembering exactly where it sits
+// (text node and offsets) so it can be turned back into a CFI on the way out.
+
+// Elements that start a new block of text: a word before one ends a paragraph,
+// and nothing is glued across one.
+const BLOCKS = new Set([
+  'p', 'div', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'li', 'ul', 'ol', 'dl', 'dt',
+  'dd', 'blockquote', 'pre', 'table', 'tr', 'td', 'th', 'caption', 'figure',
+  'figcaption', 'section', 'article', 'header', 'footer', 'aside', 'nav', 'hr',
+  'address', 'body',
+]);
+
+// Text that is not part of the prose. Superscripts are mostly footnote
+// numbers, which flashed up on their own read as noise.
+const NOT_PROSE = new Set(['script', 'style', 'sup', 'rt', 'rp', 'noscript', 'svg', 'math', 'title', 'head']);
+
+function wordsFromDoc(doc, section) {
+  const root = doc.body || doc.querySelector('body') || doc.documentElement;
+  const words = [];
+  if (!root) return words;
+
+  const walker = doc.createTreeWalker(root, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT, {
+    acceptNode(node) {
+      if (node.nodeType === 1 && NOT_PROSE.has(node.localName?.toLowerCase())) return NodeFilter.FILTER_REJECT;
+      return NodeFilter.FILTER_ACCEPT;
+    },
+  });
+
+  // `glue` says the previous text ran straight into this one with no space,
+  // as in “<i>all</i>” -- those pieces are one word, not three.
+  let glue = false;
+  while (walker.nextNode()) {
+    const node = walker.currentNode;
+    if (node.nodeType === 1) {
+      const name = node.localName?.toLowerCase();
+      if (BLOCKS.has(name)) {
+        if (words.length) words[words.length - 1].para = true;
+        glue = false;
+      } else if (name === 'br' || name === 'img') {
+        glue = false;
+      }
+      continue;
+    }
+
+    const text = (node.nodeValue || '').replace(/­/g, '');
+    if (!text) continue;
+    const re = /\S+/g;
+    let m, first = true;
+    while ((m = re.exec(text))) {
+      const t = m[0];
+      if (first && glue && m.index === 0 && words.length) {
+        words[words.length - 1].t += t;
+      } else {
+        words.push({ t, para: false, section, node, start: m.index, end: m.index + t.length });
+      }
+      first = false;
+    }
+    glue = !/\s$/.test(text) && /\S/.test(text);
+  }
+  // The end of a section is always a break -- the next file starts a new
+  // chapter or part. Without this, the sentence shown around the first word of
+  // a chapter ran back into the title of the part before it. (A pdf page end
+  // is deliberately not treated this way: sentences run across pages.)
+  if (words.length) words[words.length - 1].para = true;
+  return words;
+}
+
+// The first word on the page showing. The section is laid out in columns, one
+// page each, so a word's column only ever increases through the text -- which
+// makes "is this word on or after the page on screen?" a question whose answer
+// flips once, and a binary search finds it without measuring every word.
+function firstVisibleIndex(words, iframe, view) {
+  const doc = iframe.contentDocument;
+  const frame = iframe.getBoundingClientRect();
+  const rectOf = (w) => {
+    const r = doc.createRange();
+    r.setStart(w.node, w.start);
+    r.setEnd(w.node, w.end);
+    return r.getBoundingClientRect();
+  };
+  let lo = 0, hi = words.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    // A word with no box (hidden text) says nothing; ask its neighbour.
+    let j = mid, box = rectOf(words[j]);
+    while (!box.width && !box.height && j + 1 < words.length && j < mid + 20) box = rectOf(words[++j]);
+    if (frame.left + box.left >= view.left - 2) hi = mid; else lo = mid + 1;
+  }
+  return Math.min(lo, words.length - 1);
 }
 
 // Notes come out of the book's own markup, so keep the inline formatting that

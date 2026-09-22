@@ -64,6 +64,20 @@ library. The `node_modules` directory here exists solely to re-vendor pdf.js
   the panel; results stream in as the scan runs, with the match highlighted in
   each excerpt and a page number for PDFs. Click a result to jump there.
   Closing the panel cancels a scan in progress.
+- **Speed read**, for EPUB and PDF. One word at a time in a fixed spot
+  (rapid serial visual presentation), starting from the first word on the page
+  you were on. Each word is centred on a highlighted letter a little left of its
+  middle, so the eye has one point to rest on. Commas, sentence ends and
+  paragraph breaks hold longer, as do long words and numbers, and the first few
+  words after Play are eased in. Tap anywhere in the middle to pause; paused, the
+  whole sentence shows with the current word underlined. Back and forward move a
+  sentence at a time; speed runs 100-1000 words a minute and is remembered. The
+  screen is kept awake while it plays. Done returns the book to the word where
+  you stopped. PDF text has its page numbers dropped and words hyphenated across
+  a line break joined back up. Comprehension does fall as speed rises -- mainly
+  because you can no longer glance back -- so it suits straightforward reading
+  in bursts better than dense material, and it skips anything that is a picture.
+  All in `js/speed-read.js`; each engine only supplies the words.
 - **PDFs scroll continuously** rather than turning pages, which is what makes
   zooming in usable: past the bottom of a page you simply keep scrolling into
   the next. Only the pages near the screen are drawn and far-off ones are
@@ -123,6 +137,7 @@ If registration fails, the console message says why.
 | `serve.js` | The local server |
 | `tools/make-icons.js` | Regenerates the app icons |
 | `lib/` | Vendored epub.js, JSZip, pdf.js. Committed on purpose |
+| `js/speed-read.js` | Speed reading: the screen, the timing and the controls |
 | `js/turn-animation.js` | Page-turn motion, shared by both engines |
 | `lib/pdf-textlayer.css` | Text layer rules copied from pdf.js. Do not hand-edit |
 
