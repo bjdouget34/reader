@@ -94,6 +94,17 @@ library. The `node_modules` directory here exists solely to re-vendor pdf.js
   none.
 - `Esc` closes the toolbar, then the drawers, then returns to the library.
 
+## Which pdf.js build, and why
+
+`lib/` holds pdf.js's **legacy** build, not its modern one. The modern build
+calls brand-new JavaScript features directly -- `Promise.try` on every message
+to its worker, `Map.prototype.getOrInsertComputed`, `Math.sumPrecise` -- with
+no fallback, so on a browser that has not caught up, such as Safari on an
+iPhone that is not on the latest iOS, every PDF failed with a bare "could not
+be opened" while EPUBs worked. The legacy build is the same library with those
+features supplied for older browsers, for about 100 KB more. `npm run vendor`
+copies from `legacy/build/` for that reason; do not point it back at `build/`.
+
 ## Putting it on a tablet
 
 The app is static files, so any HTTPS host works — GitHub Pages is the usual

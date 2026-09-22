@@ -44,6 +44,13 @@ export function describeFileError(err, filename) {
   if (/encryption|encrypted|drm/i.test(message)) {
     return `${filename} is locked by its publisher (DRM). No reader but the publisher's own can open it.`;
   }
+  // A browser missing something the libraries rely on fails with a bare
+  // "... is not a function" -- a fault in the browser, not the file, and one
+  // an update fixes. Said plainly, because "could not be opened" sends you
+  // looking at the book.
+  if (name === 'TypeError' && /is not a function|is not a constructor|undefined is not/i.test(message)) {
+    return `${filename} could not be opened in this browser, which looks out of date. Updating it -- on an iPhone or iPad, updating iOS -- usually fixes this.`;
+  }
   if (/invalid|corrupt|xref|structure|not a|zip/i.test(message)) {
     return `${filename} looks damaged, so it cannot be read.`;
   }
