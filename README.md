@@ -24,7 +24,11 @@ library. The `node_modules` directory here exists solely to re-vendor pdf.js
 - Add `.epub` and `.pdf` files. They are copied into the browser's IndexedDB,
   so a book never needs the network again.
 - Remembers your place. For EPUB that is a CFI, an exact pointer into the text
-  that survives font-size changes. For PDF it is the page number.
+  that survives font-size changes. For PDF it is the page plus how far down it
+  you were, stored as one number (`157.4607` is 46% of the way down page 157),
+  so reopening restores the scroll itself and survives a zoom or a rotation in
+  between. A bare page number saved by an older build still reads correctly, as
+  the top of that page.
 - Library with covers and progress, most recently read first.
 - Six colour themes, picked from a dropdown in the toolbar: light, sepia,
   dark, amber on black, green on black, and high contrast. PDFs cannot be
@@ -60,7 +64,14 @@ library. The `node_modules` directory here exists solely to re-vendor pdf.js
   the panel; results stream in as the scan runs, with the match highlighted in
   each excerpt and a page number for PDFs. Click a result to jump there.
   Closing the panel cancels a scan in progress.
-- Page turns: click the arrows, press the arrow keys, or swipe / tap the left
+- **PDFs scroll continuously** rather than turning pages, which is what makes
+  zooming in usable: past the bottom of a page you simply keep scrolling into
+  the next. Only the pages near the screen are drawn and far-off ones are
+  freed, so a 446-page book opens in about 200 ms and holds six canvases at
+  most. Zoomed in, a page can be panned to either edge. Contents, search
+  results and the Highlights list all scroll to the spot rather than the top of
+  its page.
+- EPUB page turns: click the arrows, press the arrow keys, or swipe / tap the left
   and right edges on a touch screen. Every turn is animated -- the page drifts
   out against the direction of travel and settles back from the far side. The
   motion is deliberately not built on `scroll-behavior: smooth`; see

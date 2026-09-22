@@ -270,12 +270,35 @@ body[data-format="epub"] #viewer {
    page becomes permanently unreachable at any zoom above fit-to-width. Auto
    margins collapse to zero once the page stops fitting, so the whole width
    stays reachable. */
-.pdf-stage { position: absolute; inset: 0; overflow: auto; display: flex; padding: 14px 0; }
+.pdf-stage { position: absolute; inset: 0; overflow: auto; }
 
-/* Sized in CSS pixels by the engine. The canvas and the invisible text layer
-   are both stretched to exactly this box, which is what keeps selection
-   aligned with what you see. */
-.pdf-page { position: relative; flex: none; margin: 0 auto; box-shadow: var(--shadow); background: #fff; }
+/* The whole document as one scrolling column. At least as wide as the stage,
+   so an unzoomed page centres; as wide as its widest page when zoomed in, so a
+   page wider than the screen can be panned to both edges. The engine reads
+   each page's offset back from this layout, so the gap and padding live here
+   and nowhere else. */
+.pdf-column {
+  display: flex; flex-direction: column; gap: 12px;
+  width: max-content; min-width: 100%;
+  padding: 14px 0 40px;
+}
+
+/* Sized in CSS pixels by the engine, drawn or not -- an undrawn page is a
+   placeholder of exactly the right height, which is what keeps the scrollbar
+   honest. The canvas and the invisible text layer are both stretched to this
+   box, which is what keeps selection aligned with what you see. The placeholder
+   takes the theme's panel colour so a page not yet drawn does not flash white
+   in a dark theme. */
+.pdf-page {
+  position: relative; flex: none; margin: 0 auto;
+  box-shadow: var(--shadow); background: var(--panel);
+}
+
+/* A PDF scrolls, so there are no pages to turn: the invisible tap strips would
+   swallow the scroll gesture across a third of the screen, and the arrows have
+   nothing to do. */
+body[data-format="pdf"] .tap,
+body[data-format="pdf"] .arrow { display: none; }
 .pdf-canvas { display: block; width: 100%; height: 100%; }
 
 /* Highlight boxes, placed in percentages so they hold at any zoom. They take

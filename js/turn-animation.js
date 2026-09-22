@@ -1,4 +1,5 @@
-// Page-turn motion, shared by both engines.
+// Page-turn motion for the epub engine. (PDFs scroll continuously, so they have
+// no page turns to animate.)
 //
 // The first attempt at this leaned on `scroll-behavior: smooth`, since an epub
 // paginates by scrolling one column and the browser will happily animate that
@@ -10,8 +11,8 @@
 //
 // So the motion no longer depends on how the turn happens underneath. The
 // element is moved out against the direction of travel, the page changes while
-// it is out of sight, and it settles back from the far side. A scroll, a new
-// section and a re-rendered pdf page all look the same.
+// it is out of sight, and it settles back from the far side. A scroll and a new
+// section look the same.
 
 const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)');
 

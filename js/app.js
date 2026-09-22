@@ -297,7 +297,10 @@ function renderMarks(highlights = []) {
     jump.append(swatch, quote);
     jump.addEventListener('click', () => {
       // An epub highlight is addressed by CFI, a pdf one by page number.
-      const target = h.anchor?.cfi ?? (h.anchor?.page ? `page:${h.anchor.page}` : null);
+      // A pdf target carries how far down the page the highlight sits, so the
+      // jump lands on it rather than on the top of its page.
+      const y = h.anchor?.rects?.[0]?.y ?? 0;
+      const target = h.anchor?.cfi ?? (h.anchor?.page ? `page:${h.anchor.page}:${y.toFixed(4)}` : null);
       if (target) session?.goto(target);
       closeDrawers();
     });
