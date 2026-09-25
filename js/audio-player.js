@@ -19,6 +19,7 @@ import { audioDb, keepStorage } from './db.js';
 import { loadSettings, saveSettings } from './settings.js';
 import { readChapters } from './mp4-chapters.js';
 import { readMp3Chapters } from './mp3-chapters.js';
+import { WMA, convertWmaFiles } from './wma-convert.js';
 
 // Which chapter reading a stored track has had. 1 read M4B chapters only; 2
 // reads MP3 ones as well. A track stored under an older version -- or before
@@ -33,18 +34,18 @@ const $ = (sel) => document.querySelector(sel);
 
 // What the file picker offers. Broad on purpose: whether a file actually plays
 // is decided by trying it (see probe), not by its name.
-export const AUDIO_ACCEPT = 'audio/*,.mp3,.m4a,.m4b,.aac,.ogg,.oga,.opus,.wav,.flac,.webm';
+// .wma is named because an iPhone's picker may not count it as audio/*, and
+// it can be converted (see wma-convert.js).
+export const AUDIO_ACCEPT = 'audio/*,.mp3,.m4a,.m4b,.aac,.ogg,.oga,.opus,.wav,.flac,.webm,.wma';
 
 const SKIP_S = 30;
 const SAVE_EVERY_MS = 5000;
 export const RATES = [0.75, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2, 2.5];
 
 // Files a browser will never play, named so the refusal can say why and what
-// to do about it, rather than a bare "could not be played".
+// to do about it, rather than a bare "could not be played". (Windows Media is
+// not here: it never reaches this list, being converted first -- see attach.)
 const REFUSE = [
-  [/\.(wma|asf)$/i, 'Windows Media -- convert to MP3 or M4A first',
-    'is a Windows Media file, which browsers cannot play. Convert it to MP3 or M4A first -- VLC can do that.',
-    'are Windows Media files, which browsers cannot play. Convert them to MP3 or M4A first -- VLC can do that.'],
   [/\.(aax|aa)$/i, 'Audible -- plays only in Audible\'s app',
     'is an Audible file, which only plays in Audible\'s own app.',
     'are Audible files, which only play in Audible\'s own app.'],
@@ -267,8 +268,11 @@ export function formatTime(seconds) {
 function formatLength(seconds) {
   if (!Number.isFinite(seconds)) return 'length unknown';
   if (seconds < 60) return `${Math.round(seconds)} s`;
-  const h = Math.floor(seconds / 3600);
-  const m = Math.round((seconds % 3600) / 60);
+  // Rounded to the minute before splitting, so 1:59:40 is "2 h 0 min" and
+  // not "1 h 60 min".
+  const total = Math.round(seconds / 60);
+  const h = Math.floor(total / 60);
+  const m = total % 60;
   return h ? `${h} h ${m} min` : `${m} min`;
 }
 
@@ -670,8 +674,32 @@ async function attach(fileList) {
   if (!book || !fileList?.length) return;
   const say = state.hooks.onStatus || (() => {});
 
+  // Windows Media is converted to MP3 first, on the device, after asking.
+  let files = [...fileList];
+  let converted = 0;
+  let early = [];
+  if (files.some(f => WMA.test(f.name))) {
+    let free = null;
+    try {
+      const est = await navigator.storage?.estimate?.();
+      if (est?.quota) free = est.quota - est.usage;
+    } catch { /* no estimate */ }
+    const outcome = await convertWmaFiles(files.filter(f => WMA.test(f.name)), { freeBytes: free });
+    if (state.book?.id !== book.id) return;
+    if (outcome.cancelled) { say('Conversion cancelled. Nothing was added.'); return; }
+    if (outcome.noRoom) {
+      say(`Not enough room: converted, this audiobook would be ${mb(outcome.noRoom)} and this device has ${mb(free)} free for the app.`);
+      return;
+    }
+    files = files.filter(f => !WMA.test(f.name)).concat(outcome.files);
+    converted = outcome.files.length;
+    early = outcome.refused;
+  }
+
   say('Checking the audio files…');
-  const { tracks, refused, ignored } = await prepareTracks(fileList);
+  const prepared = await prepareTracks(files);
+  const { tracks, ignored } = prepared;
+  const refused = early.concat(prepared.refused).sort((a, b) => Number(b.named) - Number(a.named));
   if (!tracks.length) {
     say(describeRefused(refused) || (ignored ? 'There are no audio files in that selection.' : 'Nothing in that selection can be played.'));
     return;
@@ -707,7 +735,8 @@ async function attach(fileList) {
 
   const chapterCount = state.entries.filter(e => e.marked && e.heading).length;
   const length = formatLength(state.total) + (chapterCount ? `, ${chapterCount} chapters` : '');
-  const extra = ignored ? ` (${ignored} other file${ignored === 1 ? '' : 's'}, like covers, left out.)` : '';
+  const extra = (converted ? ` Converted ${converted} from Windows Media.` : '')
+    + (ignored ? ` (${ignored} other file${ignored === 1 ? '' : 's'}, like covers, left out.)` : '');
   say(refused.length
     ? `Added ${tracks.length} file${tracks.length === 1 ? '' : 's'} (${length}). Skipped ${refused.length}: ${describeRefused(refused)}`
     : `Audiobook added: ${tracks.length} file${tracks.length === 1 ? '' : 's'}, ${length}.${extra}`);

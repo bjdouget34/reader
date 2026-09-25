@@ -170,6 +170,19 @@
 
 <!-- Speed reading: one word at a time, from wherever you are. Driven by
      js/speed-read.js; the engines only supply the words. -->
+<div id="convert" class="convert" hidden role="dialog" aria-modal="true" aria-labelledby="convert-title">
+  <div class="convert-box">
+    <h2 id="convert-title"></h2>
+    <p id="convert-text" class="convert-text"></p>
+    <progress id="convert-progress" max="1" hidden></progress>
+    <p id="convert-status" class="convert-status" aria-live="polite"></p>
+    <div class="convert-actions">
+      <button id="convert-cancel">Cancel</button>
+      <button id="convert-go" class="primary">Convert</button>
+    </div>
+  </div>
+</div>
+
 <section id="rsvp" hidden aria-label="Speed read" tabindex="-1">
   <header class="rsvp-bar">
     <button id="rsvp-done" title="Back to the page (Esc)">‹ Done</button>

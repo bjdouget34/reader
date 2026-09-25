@@ -27,6 +27,7 @@ const TYPES = {
   '.ttf': 'font/ttf',
   '.bcmap': 'application/octet-stream',
   '.map': 'application/json; charset=utf-8',
+  '.wasm': 'application/wasm',   // the WMA converter; compiles faster served as wasm
 };
 
 http.createServer((req, res) => {

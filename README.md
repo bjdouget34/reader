@@ -78,13 +78,27 @@ library. The `node_modules` directory here exists solely to re-vendor pdf.js
   A folder of chapter files plays in natural order (Part 2 before Part 10) as
   one book; covers and playlists in the folder are passed over. Whether a file
   plays is decided by letting the browser read its header, not by its name.
-  MP3, M4A, M4B, AAC, OGG, WAV and FLAC play; WMA does not play in any browser
-  and is refused with a note to convert it, as are Audible files and
-  Apple copy-protected ones. `tools/convert-wma.ps1` does the converting with
-  VLC (`pwsh -File tools\convert-wma.ps1 "<folder>"`): MP3s at 96 kbps into a
-  new `<folder> (MP3)` beside the original, which is left alone; DRM-protected
+  MP3, M4A, M4B, AAC, OGG, WAV and FLAC play; Audible files and Apple
+  copy-protected ones are refused with a note saying why.
+
+  **WMA is converted on the device.** No browser plays Windows Media, so
+  picking WMA files brings up a dialog offering to convert them to MP3 there
+  and then, with ffmpeg compiled to WebAssembly (`lib/ffmpeg/`) running in a
+  worker. It shows progress and the time left as measured on that device,
+  keeps the screen on, and can be cancelled; the MP3s (mono, 64 kbps -- plenty
+  for a voice, 29 MB an hour) then go in like any picked file. The converter is
+  32 MB (10 MB downloaded) and is fetched only the first time it is used, then
+  cached for offline use. Copy-protected WMAs are detected from their header
+  and refused, since nothing can convert those. On this PC a two-hour book took
+  about 75 seconds; a tablet will be slower.
+
+  `tools/convert-wma.ps1` does the same on a PC, with VLC
+  (`pwsh -File tools\convert-wma.ps1 "<folder>"`): MP3s at 96 kbps stereo into
+  a new `<folder> (MP3)` beside the original, which is left alone; DRM-protected
   WMAs are named and skipped; each result is checked against the source's
-  length. It runs at about real time -- a two-hour book takes two minutes. Audiobooks live in their own IndexedDB store so
+  length. It converts about an hour of audio a minute.
+
+  Audiobooks live in their own IndexedDB store so
   listing the library never reads them; the listening position is kept in
   localStorage so saving it every few seconds does not rewrite the book's file.
   **Chapters in an M4B or M4A are read** when it is added, and the book is then
@@ -195,10 +209,12 @@ If registration fails, the console message says why.
 | `serve.js` | The local server |
 | `tools/make-icons.js` | Regenerates the app icons |
 | `tools/convert-wma.ps1` | Converts WMA audiobooks to MP3 with VLC, since no browser plays WMA |
-| `lib/` | Vendored epub.js, JSZip, pdf.js. Committed on purpose |
+| `lib/` | Vendored epub.js, JSZip, pdf.js, ffmpeg. Committed on purpose |
 | `js/audio-player.js` | The audiobook player: storage, playback, the bar, the lock screen |
 | `js/mp4-chapters.js` | Chapter markers out of an M4B / M4A |
 | `js/mp3-chapters.js` | Chapter markers out of an MP3's ID3 tag, CHAP and OverDrive |
+| `js/wma-convert.js` | WMA to MP3 on the device: the header check, the dialog, the progress |
+| `js/wma-worker.js` | Runs ffmpeg on one file, streaming the MP3 out in pieces |
 | `js/speed-read.js` | Speed reading: the screen, the timing and the controls |
 | `js/turn-animation.js` | Page-turn motion, shared by both engines |
 | `lib/pdf-textlayer.css` | Text layer rules copied from pdf.js. Do not hand-edit |

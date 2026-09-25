@@ -6,9 +6,10 @@
   "scripts": {
     "start": "node serve.js",
     "icons": "node tools/make-icons.js",
-    "vendor": "npm install && node -e \"const f=require('fs');for(const n of ['pdf.min.mjs','pdf.worker.min.mjs'])f.copyFileSync('node_modules/pdfjs-dist/legacy/build/'+n,'lib/'+n);console.log('re-vendored pdf.js')\""
+    "vendor": "npm install && node -e \"const f=require('fs');for(const n of ['pdf.min.mjs','pdf.worker.min.mjs'])f.copyFileSync('node_modules/pdfjs-dist/legacy/build/'+n,'lib/'+n);for(const n of ['ffmpeg-core.js','ffmpeg-core.wasm'])f.copyFileSync('node_modules/@ffmpeg/core/dist/esm/'+n,'lib/ffmpeg/'+n);console.log('re-vendored pdf.js and ffmpeg')\""
   },
   "devDependencies": {
+    "@ffmpeg/core": "0.12.10",
     "pdfjs-dist": "^6.2.108"
   }
 }

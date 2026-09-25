@@ -11,8 +11,17 @@ no network. They are not my work, and they keep their own licenses.
 | `pdf-textlayer.css` | pdf.js (extract of `web/pdf_viewer.css`) | 6.2.108 | Apache-2.0 |
 | `cmaps/` | pdf.js character maps | 6.2.108 | see `cmaps/LICENSE` |
 | `standard_fonts/` | pdf.js fallback fonts | 6.2.108 | see `standard_fonts/LICENSE_FOXIT`, `LICENSE_LIBERATION` |
+| `ffmpeg/ffmpeg-core.js`, `ffmpeg/ffmpeg-core.wasm` | [ffmpeg.wasm](https://github.com/ffmpegwasm/ffmpeg.wasm) core (FFmpeg compiled to WebAssembly), from the `@ffmpeg/core` npm package, `dist/esm/` | 0.12.10 | GPL-2.0-or-later |
 
-To refresh the pdf.js files after changing the version in `package.json`:
+The ffmpeg core is used only to convert Windows Media audiobooks to MP3
+(`js/wma-worker.js`). It is distributed unmodified under the GPL; its complete
+source is the ffmpeg.wasm repository at tag `v0.12.10`
+(https://github.com/ffmpegwasm/ffmpeg.wasm/tree/v0.12.10), which builds it
+from FFmpeg (https://ffmpeg.org) and the libraries listed in its `build/`
+directory, including LAME for the MP3 encoding.
+
+To refresh the pdf.js and ffmpeg files after changing a version in
+`package.json`:
 
 ```bash
 npm run vendor

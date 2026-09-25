@@ -10,7 +10,7 @@
 //
 // Bump CACHE when you change the file list, or the old cache lingers.
 
-const CACHE = 'my-reader-v21';
+const CACHE = 'my-reader-v22';
 
 const CORE = [
   './',
@@ -28,6 +28,10 @@ const CORE = [
   'js/audio-player.js',
   'js/mp4-chapters.js',
   'js/mp3-chapters.js',
+  // The WMA converter's own code; the 32 MB ffmpeg it drives (lib/ffmpeg/)
+  // is left out and cached the first time it is used, like any lib/ file.
+  'js/wma-convert.js',
+  'js/wma-worker.js',
   'js/pdf-engine.js',
   'lib/jszip.min.js',
   'lib/epub.min.js',
