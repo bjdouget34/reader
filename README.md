@@ -64,6 +64,27 @@ library. The `node_modules` directory here exists solely to re-vendor pdf.js
   the panel; results stream in as the scan runs, with the match highlighted in
   each excerpt and a page number for PDFs. Click a result to jump there.
   Closing the panel cancels a scan in progress.
+- **An audiobook player**, for EPUB and PDF alike. Tap **🎧 Audio** in the
+  toolbar and pick the audiobook -- one file, or every file in its folder at
+  once. It is stored on the device with the book, so it plays offline, and it
+  resumes where you stopped listening. A bar across the top of the page has
+  play, back and forward 30 seconds, a position bar across the whole book,
+  speed, and a track list with Replace and Remove under ⋯. The toolbar's 🎧 or
+  the bar's own ⌃ hides it; with the toolbar collapsed too, a small 🎧 beside
+  the ⌄ brings it back. Hidden is not stopped, and the lock screen and
+  headphone buttons work, because it is a real audio element rather than
+  speech synthesis.
+
+  A folder of chapter files plays in natural order (Part 2 before Part 10) as
+  one book; covers and playlists in the folder are passed over. Whether a file
+  plays is decided by letting the browser read its header, not by its name.
+  MP3, M4A, M4B, AAC, OGG, WAV and FLAC play; WMA does not play in any browser
+  and is refused with a note to convert it (VLC can), as are Audible files and
+  Apple copy-protected ones. Audiobooks live in their own IndexedDB store so
+  listing the library never reads them; the listening position is kept in
+  localStorage so saving it every few seconds does not rewrite the book's file.
+  Not yet: chapter markers inside an M4B -- a single long file shows as one
+  track, and is navigated by the position bar and the 30-second buttons.
 - **Speed read**, for EPUB and PDF. One word at a time in a fixed spot
   (rapid serial visual presentation), starting from the first word on the page
   you were on. Each word is centred on a highlighted letter a little left of its
@@ -148,6 +169,7 @@ If registration fails, the console message says why.
 | `serve.js` | The local server |
 | `tools/make-icons.js` | Regenerates the app icons |
 | `lib/` | Vendored epub.js, JSZip, pdf.js. Committed on purpose |
+| `js/audio-player.js` | The audiobook player: storage, playback, the bar, the lock screen |
 | `js/speed-read.js` | Speed reading: the screen, the timing and the controls |
 | `js/turn-animation.js` | Page-turn motion, shared by both engines |
 | `lib/pdf-textlayer.css` | Text layer rules copied from pdf.js. Do not hand-edit |

@@ -56,6 +56,7 @@
     <button id="marks-open" disabled title="List of highlights">Highlights</button>
     <button id="search-open" disabled title="Search this book (Ctrl+F)">Search</button>
     <button id="speed-open" disabled title="Speed read from this page">Speed read</button>
+    <button id="audio-open" disabled title="Add an audiobook for this book">🎧 Audio</button>
 
     <span class="group" role="group" aria-label="Size">
       <button id="smaller" title="Smaller">A−</button>
@@ -72,6 +73,23 @@
 
   <!-- Sits at the top edge once the toolbar is hidden. -->
   <button id="chrome-show" title="Show toolbar" aria-label="Show toolbar" hidden>⌄</button>
+  <!-- Beside it, when the audiobook player is tucked away as well. -->
+  <button id="audio-show" title="Show the audiobook player" aria-label="Show the audiobook player" hidden>🎧</button>
+
+  <!-- The audiobook player. Driven by js/audio-player.js. -->
+  <input id="audio-file" type="file" multiple hidden>
+  <div id="audio-bar" class="audio-bar" hidden>
+    <button id="audio-hide" class="audio-hide" title="Hide the player (it keeps playing)" aria-label="Hide the player">⌃</button>
+    <button id="audio-back" title="Back 30 seconds" aria-label="Back 30 seconds">↺30</button>
+    <button id="audio-play" class="primary audio-play" title="Play" aria-label="Play">▶</button>
+    <button id="audio-fwd" title="Forward 30 seconds" aria-label="Forward 30 seconds">30↻</button>
+    <span id="audio-time" class="audio-time">0:00</span>
+    <input id="audio-seek" type="range" min="0" max="1000" step="1" value="0" aria-label="Position in the audiobook">
+    <span id="audio-left" class="audio-time"></span>
+    <span id="audio-track" class="audio-time" hidden></span>
+    <select id="audio-rate" class="picker audio-rate" aria-label="Playback speed" title="Playback speed"></select>
+    <button id="audio-more" title="Tracks, replace or remove" aria-label="Audiobook tracks and options">⋯</button>
+  </div>
 
   <div class="stage">
     <div id="viewer"></div>
@@ -113,6 +131,19 @@
         <button data-close="marks" aria-label="Close highlights">×</button>
       </div>
       <div id="marks-list" class="drawer-body"></div>
+    </aside>
+
+    <aside id="audio" class="drawer" hidden>
+      <div class="drawer-head">
+        <strong>Audiobook</strong>
+        <button data-close="audio" aria-label="Close audiobook panel">×</button>
+      </div>
+      <p id="audio-summary" class="audio-summary"></p>
+      <div id="audio-tracks" class="drawer-body"></div>
+      <div class="audio-actions">
+        <button id="audio-replace">Replace audiobook…</button>
+        <button id="audio-remove">Remove audiobook</button>
+      </div>
     </aside>
 
     <aside id="search" class="drawer" hidden>

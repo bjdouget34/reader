@@ -1,9 +1,10 @@
 // Library screen, importing, and the reader's chrome.
 
-import { db, fingerprint, usage } from './db.js';
+import { db, audioDb, fingerprint, usage } from './db.js';
 import { openBook, readMetadata, detectFormat, describeFileError } from './reader.js';
 import { loadSettings, saveSettings, HIGHLIGHT_COLORS, THEMES, BUILD } from './settings.js';
 import { openSpeedRead } from './speed-read.js';
+import { openAudioFor, closeAudio, syncAudioChrome, wireAudioControls, removeAudioFor } from './audio-player.js';
 
 const $ = (sel) => document.querySelector(sel);
 
@@ -32,7 +33,9 @@ async function renderLibrary() {
   grid.textContent = '';
   $('#empty').hidden = books.length > 0;
 
-  for (const book of books) grid.append(bookCard(book));
+  let withAudio = new Set();
+  try { withAudio = new Set(await audioDb.ids()); } catch { /* no audio store yet */ }
+  for (const book of books) grid.append(bookCard(book, withAudio.has(book.id)));
 
   const est = await usage();
   const stored = est
@@ -41,7 +44,7 @@ async function renderLibrary() {
   $('#usage').textContent = `${stored} · ${BUILD}`;
 }
 
-function bookCard(book) {
+function bookCard(book, hasAudio = false) {
   const card = document.createElement('article');
   card.className = 'card';
   card.tabIndex = 0;
@@ -75,6 +78,14 @@ function bookCard(book) {
     art.append(count);
   }
 
+  if (hasAudio) {
+    const listen = document.createElement('span');
+    listen.className = 'audio-badge';
+    listen.textContent = '🎧';
+    listen.title = 'Has an audiobook';
+    art.append(listen);
+  }
+
   if (book.percent) {
     const bar = document.createElement('div');
     bar.className = 'progress';
@@ -101,8 +112,9 @@ function bookCard(book) {
   remove.textContent = '×';
   remove.addEventListener('click', async (e) => {
     e.stopPropagation();
-    if (!confirm(`Remove "${book.title}"?\n\nThe file, your place in it, and any highlights are deleted from this device.`)) return;
+    if (!confirm(`Remove "${book.title}"?\n\nThe file, your place in it, any highlights and any audiobook are deleted from this device.`)) return;
     await db.remove(book.id);
+    try { await removeAudioFor(book.id); } catch { /* it had none */ }
     renderLibrary();
   });
 
@@ -224,6 +236,12 @@ async function openById(id) {
     $('#speed-open').disabled = !session.speedSource;
     updateHighlightButton();
     renderMarks(session.highlights());
+    openAudioFor(record, {
+      onStatus: status,
+      // The player bar coming or going changes the reading area's height.
+      onLayout: relayoutSoon,
+      onAudioChanged: () => {},
+    });
   } catch (err) {
     console.error(err);
     status(err?.message?.includes('too long')
@@ -251,6 +269,7 @@ function buildToc(items) {
 }
 
 function closeBook() {
+  closeAudio();
   session?.close();
   session = null;
   closeDrawers();
@@ -517,6 +536,7 @@ function applyNavState({ canGoBack, label }) {
 // ------------------------------------------------------------------ drawers
 
 function closeDrawers() {
+  $('#audio').hidden = true;
   $('#toc').hidden = true;
   $('#marks').hidden = true;
   $('#search').hidden = true;
@@ -561,16 +581,21 @@ function applyChrome() {
   const hidden = !!loadSettings().chromeHidden;
   document.body.dataset.chrome = hidden ? 'hidden' : 'shown';
   $('#chrome-show').hidden = !hidden;
+  syncAudioChrome();
 }
 
 function setChromeHidden(hidden) {
   saveSettings({ chromeHidden: hidden });
   applyChrome();
 
-  // Collapsing the toolbar changes the height of the reading area without the
-  // window resizing. The engines watch their own box for exactly this, but tell
-  // them outright as well -- it is one call, and it does not depend on the
-  // observer firing when this particular device happens to reflow.
+  relayoutSoon();
+}
+
+// Collapsing the toolbar -- or the audiobook player -- changes the height of
+// the reading area without the window resizing. The engines watch their own
+// box for exactly this, but are told outright as well: it is one call, and it
+// does not depend on the observer firing when a particular device reflows.
+function relayoutSoon() {
   requestAnimationFrame(() => {
     session?.relayout?.();
     setTimeout(() => session?.relayout?.(), 250);
@@ -682,6 +707,8 @@ $('#theme').addEventListener('change', (e) => {
 });
 
 $('#chrome-hide').addEventListener('click', () => setChromeHidden(true));
+$('#audio-more').addEventListener('click', () => toggleDrawer('audio'));
+wireAudioControls();
 $('#chrome-show').addEventListener('click', () => setChromeHidden(false));
 
 document.addEventListener('keydown', (e) => {

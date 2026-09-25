@@ -7,3 +7,7 @@ node_modules/
 # them, which also means git would happily publish them -- and a GitHub Pages
 # site is public. Keep them local.
 sample_books/
+
+# Audiobooks for testing the player. Hundreds of megabytes, and someone else's
+# copyright -- the same reason as the books above, only larger.
+Sample_Audiobooks/

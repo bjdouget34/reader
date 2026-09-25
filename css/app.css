@@ -171,6 +171,13 @@ button.primary { background: var(--accent); color: var(--accent-fg); border-colo
 }
 
 .progress { position: absolute; left: 0; right: 0; bottom: 0; height: 4px; background: rgba(0, 0, 0, .25); }
+
+/* Beside the format badge, on a book that has an audiobook. */
+.audio-badge {
+  position: absolute; top: 5px; left: 44px;
+  font-size: 12px; padding: 2px 4px; border-radius: 4px;
+  background: rgba(0, 0, 0, .62);
+}
 .progress span { display: block; height: 100%; background: var(--accent); }
 
 .remove {
@@ -426,6 +433,65 @@ body[data-format="pdf"] .arrow { display: none; }
 .rsvp-controls button { min-width: 48px; min-height: 44px; font-size: 18px; }
 .rsvp-controls .rsvp-play { min-width: 112px; }
 .rsvp-speed .readout { min-width: 72px; font-size: 13px; }
+
+/* ---------------------------------------------------------- audiobook */
+
+/* A slim bar under the toolbar. It wraps rather than widening the page: a row
+   wider than the screen is what made Android shrink the whole page once. */
+.audio-bar {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+  flex: none;
+  padding: 6px max(12px, env(safe-area-inset-right)) 6px max(12px, env(safe-area-inset-left));
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
+}
+.audio-bar > * { min-width: 0; }
+.audio-bar button { padding: 7px 9px; }
+.audio-play { min-width: 46px; font-size: 15px; }
+.audio-hide { color: var(--muted); }
+.audio-time {
+  font-size: 12px; color: var(--muted);
+  font-variant-numeric: tabular-nums; text-align: center; min-width: 3.4em;
+}
+#audio-seek { flex: 1 1 110px; min-width: 70px; accent-color: var(--accent); }
+.audio-bar .audio-rate { padding: 6px 4px; font-size: 13px; }
+/* On a phone-width screen the time left is the first thing to go. */
+@media (max-width: 620px) { #audio-left { display: none; } }
+
+/* With the toolbar collapsed the player is the top of the screen, and the
+   pinned toolbar toggle sits over its right end -- so it keeps clear of it,
+   and of the notch. */
+body[data-chrome="hidden"] .audio-bar {
+  padding-top: max(6px, env(safe-area-inset-top));
+  padding-right: max(62px, calc(env(safe-area-inset-right) + 62px));
+  min-height: 48px;
+}
+
+/* The toolbar's 🎧 says when something is playing, since a hidden player is
+   still a playing one. */
+#audio-open.is-playing,
+#audio-show.is-playing { border-color: var(--accent); color: var(--accent); opacity: 1; }
+
+#audio-show {
+  position: absolute; z-index: 30;
+  top: max(10px, env(safe-area-inset-top));
+  right: calc(max(10px, env(safe-area-inset-right)) + 52px);
+  width: 44px; height: 30px; padding: 0;
+  font-size: 15px; line-height: 1;
+  background: color-mix(in srgb, var(--panel) 88%, transparent);
+  border-color: var(--line);
+  opacity: .8;
+}
+
+.audio-summary { margin: 0; padding: 10px 14px; font-size: 13px; color: var(--muted); }
+.audio-track {
+  display: flex; justify-content: space-between; gap: 12px; width: 100%;
+  text-align: left; border: none; border-bottom: 1px solid var(--line); border-radius: 0;
+  padding: 11px 14px; background: transparent; line-height: 1.3;
+}
+.audio-track.is-current { color: var(--accent); font-weight: 600; }
+.audio-track-len { color: var(--muted); font-variant-numeric: tabular-nums; flex: none; }
+.audio-actions { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px 14px; border-top: 1px solid var(--line); }
 
 /* Contents and Highlights are the same panel with different contents. */
 .drawer {

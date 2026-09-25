@@ -5,7 +5,7 @@ const KEY = 'my-reader:settings';
 
 // Shown in the library footer so "is the tablet actually running the new
 // code?" is answerable at a glance. Bump it together with CACHE in sw.js.
-export const BUILD = 'v18';
+export const BUILD = 'v19';
 
 const DEFAULTS = {
   theme: 'light',       // a key of THEMES below
@@ -13,6 +13,8 @@ const DEFAULTS = {
   zoom: 100,            // pdf zoom, percent of fit-to-width
   chromeHidden: false,  // reading with the top toolbar collapsed
   speedWpm: 300,        // speed reading, words per minute
+  audioRate: 1,         // audiobook playback speed
+  audioBarShown: true,  // the audiobook player bar, when a book has one
 };
 
 export function loadSettings() {
