@@ -686,6 +686,14 @@ function destinationY(dest, size) {
   return clamp(1 - top / size.h, 0, 1);
 }
 
+// For the EPUB converter (pdf-to-epub.js): a document opened exactly as the
+// reader opens one, fonts and character maps included, and pdf.js's names for
+// its drawing operations, which say where the pictures are.
+export function loadDocument(bytes) {
+  return pdfjs.getDocument({ data: copy(bytes), ...RESOURCES });
+}
+export const OPS = pdfjs.OPS;
+
 export async function metadata(bytes) {
   const task = pdfjs.getDocument({ data: copy(bytes), ...RESOURCES });
   const doc = await task.promise;

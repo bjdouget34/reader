@@ -484,6 +484,10 @@ body[data-chrome="hidden"] .audio-bar {
 }
 
 .audio-summary { margin: 0; padding: 10px 14px; font-size: 13px; color: var(--muted); }
+/* Only while a PDF is open. */
+.pdf-only { display: none; }
+body[data-format="pdf"] .pdf-only { display: inline-block; }
+
 /* Converting Windows Media: a dialog over everything, since the work takes
    minutes and leaving the page stops it. */
 .convert {

@@ -17,11 +17,13 @@
 // what Audible's own standard quality is -- and it keeps a long book small
 // enough for a phone: 29 MB an hour.
 
+import { ask, progress, formatSpan, timeLeft } from './convert-dialog.js';
+
+export { formatSpan };
+
 export const WMA = /\.(wma|asf)$/i;
 export const MP3_KBPS = 64;
 export const MP3_CHANNELS = 1;
-
-const $ = (sel) => document.querySelector(sel);
 
 // --------------------------------------------------------- the file header
 //
@@ -77,16 +79,6 @@ export async function wmaInfo(file) {
 
 export const mp3Name = (name) => name.replace(/\.[^.]+$/, '') + '.mp3';
 export const mp3Bytes = (seconds) => Math.round((seconds * MP3_KBPS * 1000) / 8);
-
-// "2 h 5 min", "12 min", "under a minute".
-export function formatSpan(seconds) {
-  if (!Number.isFinite(seconds)) return '';
-  if (seconds < 60) return 'under a minute';
-  const min = Math.round(seconds / 60);
-  const h = Math.floor(min / 60);
-  const m = min % 60;
-  return h ? `${h} h${m ? ` ${m} min` : ''}` : `${m} min`;
-}
 
 // --------------------------------------------------------- the converter
 
@@ -153,10 +145,7 @@ export function createConverter({ onStarted, onProgress } = {}) {
 // download. Then shows where it is and how long is left, measured from how
 // fast it is actually going on this device rather than guessed.
 
-function ask({ convertible, protectedCount, seconds }) {
-  const root = $('#convert');
-  const go = $('#convert-go');
-  const cancel = $('#convert-cancel');
+function askToConvert({ convertible, protectedCount, seconds }) {
   const n = convertible.length;
   const what = n === 1 ? 'This file is' : `These ${n} files are`;
   const lines = [
@@ -171,25 +160,7 @@ function ask({ convertible, protectedCount, seconds }) {
   if (protectedCount) {
     lines.push(`${protectedCount === 1 ? 'One file is' : `${protectedCount} files are`} copy-protected and cannot be converted, so ${protectedCount === 1 ? 'it is' : 'they are'} left out.`);
   }
-  $('#convert-title').textContent = 'Convert Windows Media audio?';
-  $('#convert-text').textContent = lines.join('\n\n');
-  $('#convert-progress').hidden = true;
-  $('#convert-status').textContent = '';
-  go.hidden = false;
-  cancel.textContent = 'Cancel';
-  root.hidden = false;
-  go.focus();
-  return new Promise((resolve) => {
-    const finish = (yes) => {
-      go.removeEventListener('click', onGo);
-      cancel.removeEventListener('click', onCancel);
-      resolve(yes);
-    };
-    const onGo = () => finish(true);
-    const onCancel = () => { root.hidden = true; finish(false); };
-    go.addEventListener('click', onGo);
-    cancel.addEventListener('click', onCancel);
-  });
+  return ask({ title: 'Convert Windows Media audio?', text: lines.join('\n\n'), go: 'Convert' });
 }
 
 // Converts the WMA files among a selection. Returns the MP3s as Files, the
@@ -224,33 +195,19 @@ export async function convertWmaFiles(files, { freeBytes = null } = {}) {
     return { files: [], refused, cancelled: false };
   }
 
-  if (!(await ask({ convertible, protectedCount, seconds }))) return { files: [], refused, cancelled: true };
+  if (!(await askToConvert({ convertible, protectedCount, seconds }))) return { files: [], refused, cancelled: true };
   return run(convertible, seconds, refused);
 }
 
 async function run(convertible, total, refused) {
-  const root = $('#convert');
-  const bar = $('#convert-progress');
-  const statusEl = $('#convert-status');
-  const cancelBtn = $('#convert-cancel');
-  $('#convert-go').hidden = true;
-  $('#convert-title').textContent = 'Converting…';
-  $('#convert-text').textContent = 'Keep the app open until this finishes.';
-  cancelBtn.textContent = 'Cancel';
-  bar.hidden = false;
-  bar.removeAttribute('value');           // indeterminate while the converter loads
-  statusEl.textContent = 'Getting the converter ready…';
-
-  let wakeLock = null;
-  const holdScreen = async () => {
-    if (document.visibilityState !== 'visible') return;
-    try { wakeLock = await navigator.wakeLock?.request('screen'); } catch { /* not offered */ }
-  };
-  // The browser drops a wake lock whenever the page is hidden; take it again
-  // on the way back.
-  const onVisible = () => { if (!wakeLock || wakeLock.released) holdScreen(); };
-  document.addEventListener('visibilitychange', onVisible);
-  await holdScreen();
+  let cancelled = false;
+  let converter = null;
+  const dialog = progress({
+    title: 'Converting…',
+    text: 'Keep the app open until this finishes.',
+    onCancel: () => { cancelled = true; converter?.cancel(); },
+  });
+  dialog.status('Getting the converter ready…');   // no length yet: the converter is loading
 
   let doneBefore = 0;       // seconds of audio in the files already finished
   let current = 0;          // seconds into the file being converted
@@ -260,27 +217,16 @@ async function run(convertible, total, refused) {
     const n = convertible.length;
     const part = n > 1 ? `File ${index + 1} of ${n}` : 'Converting';
     const done = doneBefore + current;
-    if (!Number.isFinite(total) || !total) { statusEl.textContent = `${part} · ${formatSpan(done)} done`; return; }
+    if (!Number.isFinite(total) || !total) { dialog.status(`${part} · ${formatSpan(done)} done`); return; }
     const fraction = Math.min(1, done / total);
-    bar.value = fraction;
-    bar.max = 1;
-    let left = '';
-    const elapsed = (performance.now() - clockStart) / 1000;
-    // Wait a few seconds before estimating: the first moments are not typical.
-    if (clockStart && elapsed > 4 && done > 0) {
-      const s = ((total - done) * elapsed) / done;
-      left = s < 60 ? ' · less than a minute left' : ` · about ${formatSpan(s)} left`;
-    }
-    statusEl.textContent = `${part} · ${Math.floor(fraction * 100)}%${left}`;
+    const left = clockStart ? timeLeft(fraction, (performance.now() - clockStart) / 1000) : '';
+    dialog.status(`${part} · ${Math.floor(fraction * 100)}%${left ? ` · ${left}` : ''}`, fraction);
   };
 
-  const converter = createConverter({
+  converter = createConverter({
     onStarted: () => { if (!clockStart) clockStart = performance.now(); show(); },
     onProgress: (s) => { current = Math.max(0, s); show(); },
   });
-  let cancelled = false;
-  const onCancel = () => { cancelled = true; converter.cancel(); };
-  cancelBtn.addEventListener('click', onCancel);
 
   const out = [];
   try {
@@ -304,11 +250,8 @@ async function run(convertible, total, refused) {
       doneBefore += Number.isFinite(seconds) ? seconds : 0;
     }
   } finally {
-    cancelBtn.removeEventListener('click', onCancel);
-    document.removeEventListener('visibilitychange', onVisible);
     converter.close();
-    try { wakeLock?.release(); } catch { /* ignore */ }
-    root.hidden = true;
+    dialog.close();
   }
   if (cancelled) return { files: [], refused, cancelled: true };
   return { files: out, refused, cancelled: false };

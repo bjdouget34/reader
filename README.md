@@ -146,6 +146,24 @@ library. The `node_modules` directory here exists solely to re-vendor pdf.js
   most. Zoomed in, a page can be panned to either edge. Contents, search
   results and the Highlights list all scroll to the spot rather than the top of
   its page.
+- **Make an EPUB from a PDF**, on the device. **Make EPUB** in a PDF's toolbar
+  lays its text out again as an EPUB, which then resizes and takes the colour
+  themes properly, and adds it to the library beside the PDF (making it again
+  replaces the earlier copy). A PDF does not know what a paragraph is, so
+  `js/pdf-text.js` reads the layout: lines by baseline; page numbers and
+  running heads by repetition in the margins; paragraphs from gaps, lines that
+  stop short (the next word would have fitted -- which copes with ragged-right
+  text), bullets and indents; headings from size, bold, capitals, centring,
+  or a slightly bigger gap; chapters from the page break before them; columns
+  by the XY cut; a hyphen at a line end kept or dropped by how the book writes
+  that word elsewhere. Pictures are cut out where they sit by drawing the page;
+  tables, and scanned pages, are kept as pictures of the page, since they
+  cannot be reflowed. The original page breaks are kept as markers. Checked
+  against Super System (27 chapters, 18 pictures), Super System 2 (446 pages in
+  about 4 s on a PC; 35 chapters, ~560 sections) and the ASNT practice (tables,
+  two columns), with 33 of 33 mutants killed. Highlights on the PDF are not
+  carried across, and a scanned PDF with no text is refused rather than turned
+  into an EPUB of pictures.
 - EPUB page turns: click the arrows, press the arrow keys, or swipe / tap the left
   and right edges on a touch screen. Every turn is animated -- the page drifts
   out against the direction of travel and settles back from the far side. The
@@ -215,6 +233,9 @@ If registration fails, the console message says why.
 | `js/mp3-chapters.js` | Chapter markers out of an MP3's ID3 tag, CHAP and OverDrive |
 | `js/wma-convert.js` | WMA to MP3 on the device: the header check, the dialog, the progress |
 | `js/wma-worker.js` | Runs ffmpeg on one file, streaming the MP3 out in pieces |
+| `js/pdf-text.js` | PDF to EPUB, the layout reading and the EPUB packing. No DOM, so it runs in Node too |
+| `js/pdf-to-epub.js` | PDF to EPUB, the browser side: reading pages, drawing pictures, the dialog |
+| `js/convert-dialog.js` | The dialog, wake lock and time-left estimate both converters share |
 | `js/speed-read.js` | Speed reading: the screen, the timing and the controls |
 | `js/turn-animation.js` | Page-turn motion, shared by both engines |
 | `lib/pdf-textlayer.css` | Text layer rules copied from pdf.js. Do not hand-edit |

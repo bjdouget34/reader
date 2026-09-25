@@ -14,6 +14,7 @@ const $ = (sel) => document.querySelector(sel);
 const DEBUG = new URLSearchParams(location.search).has('debug');
 
 let session = null;    // the open book's controller, or null
+let openRecord = null; // the open book's stored record, for Make EPUB
 let coverUrls = [];    // blob: URLs to revoke when the library re-renders
 let pending = null;    // text selected but not yet highlighted
 let editing = null;    // cfi of the highlight the toolbar is acting on
@@ -185,6 +186,7 @@ function status(message) {
 async function openById(id) {
   const record = await db.get(id);
   if (!record) return;
+  openRecord = record;
 
   show('reader');
   $('#book-title').textContent = record.title;
@@ -269,6 +271,7 @@ function buildToc(items) {
 }
 
 function closeBook() {
+  openRecord = null;
   closeAudio();
   session?.close();
   session = null;
@@ -661,6 +664,59 @@ $('#search-open').addEventListener('click', () => toggleDrawer('search'));
 // Speed reading covers the reader completely and hands the page back at the
 // word where it stopped. Panels and the highlight bar are closed first so none
 // of them is sitting there, stale, when it comes back.
+// Make EPUB: a reflowable copy of the open PDF, added to the library beside
+// it. The work is in pdf-to-epub.js, loaded only when first asked for.
+$('#epub-make').addEventListener('click', async () => {
+  const record = openRecord;
+  if (!record || record.format !== 'pdf') return;
+  const button = $('#epub-make');
+  button.disabled = true;
+  try {
+    const { convertPdfToEpub } = await import('./pdf-to-epub.js');
+    // One copy per PDF: making it again replaces the one made before, rather
+    // than leaving two books of the same name that differ only in when.
+    const earlier = (await db.all()).find(b => b.madeFrom === record.id) || null;
+    const result = await convertPdfToEpub(record, { replacing: !!earlier });
+    if (result.cancelled) { status('Cancelled. Nothing was added.'); return; }
+    const file = result.bytes.slice().buffer;
+    const id = await fingerprint(file);
+    if (!(await db.get(id))) {
+      await db.put({
+        id, format: 'epub', file,
+        title: record.title, author: record.author, cover: record.cover || null,
+        added: Date.now(), lastRead: null,
+        position: null, percent: 0, locations: null,
+        highlights: [], madeFrom: record.id,
+      });
+    }
+    if (earlier && earlier.id !== id) {
+      await db.remove(earlier.id);
+      try { await removeAudioFor(earlier.id); } catch { /* it had none */ }
+    }
+    const s = result.summary;
+    const parts = [
+      `${s.chapters || 'No'} chapter${s.chapters === 1 ? '' : 's'} found`,
+      s.pictures ? `${s.pictures} picture${s.pictures === 1 ? '' : 's'}` : null,
+      s.wholePages ? `${s.wholePages} page${s.wholePages === 1 ? '' : 's'} kept as pictures (tables, or too complicated to lay out again)` : null,
+    ].filter(Boolean);
+    const { ask } = await import('./convert-dialog.js');
+    const open = await ask({
+      title: 'EPUB copy added',
+      text: `"${record.title}" is in your library as an EPUB as well as the PDF.\n\n${parts.join('; ')}.`,
+      go: 'Open it',
+      cancel: 'Stay here',
+    });
+    $('#convert').hidden = true;
+    if (open) { closeBook(); await openById(id); }
+  } catch (err) {
+    console.error(err);
+    $('#convert').hidden = true;
+    status(err?.name === 'ConvertError' ? err.message : 'The EPUB could not be made from this PDF.');
+  } finally {
+    button.disabled = false;
+  }
+});
+
 $('#speed-open').addEventListener('click', () => {
   if (!session?.speedSource) return;
   closeDrawers();
