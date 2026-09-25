@@ -18,6 +18,16 @@
 import { audioDb, keepStorage } from './db.js';
 import { loadSettings, saveSettings } from './settings.js';
 import { readChapters } from './mp4-chapters.js';
+import { readMp3Chapters } from './mp3-chapters.js';
+
+// Which chapter reading a stored track has had. 1 read M4B chapters only; 2
+// reads MP3 ones as well. A track stored under an older version -- or before
+// chapters were read at all -- is read again when its book opens, since an
+// MP3 stored under 1 was recorded as "no chapters" without being looked at.
+const CHAPTER_READING = 2;
+
+const CHAPTER_READERS = { 'audio/mp4': readChapters, 'audio/mpeg': readMp3Chapters };
+const readChaptersOf = (track) => (CHAPTER_READERS[track.type] || (async () => null))(track.blob);
 
 const $ = (sel) => document.querySelector(sel);
 
@@ -109,10 +119,13 @@ export async function prepareTracks(fileList) {
     const blob = new Blob([file], { type });
     const { ok, duration } = await probe(blob);
     if (!ok) { refused.push({ name: file.name, short: UNREADABLE[0], long: UNREADABLE[1], many: UNREADABLE[2], named: false }); continue; }
-    // Only an MP4 carries chapter markers in a form read here. null means the
-    // file was looked at and has none, as distinct from never looked at.
-    const chapters = type === 'audio/mp4' ? await readChapters(blob) : null;
-    tracks.push({ name: trackName(file.name), file: file.name, type, size: file.size, duration, chapters, blob });
+    // null means the file was looked at and has none, as distinct from a
+    // track that was never looked at -- which is what chaptersRead records.
+    const chapters = await readChaptersOf({ type, blob });
+    tracks.push({
+      name: trackName(file.name), file: file.name, type, size: file.size, duration,
+      chapters, chaptersRead: CHAPTER_READING, blob,
+    });
   }
   // A reason that says what to do goes first: "convert it" is more use than
   // "could not be played".
@@ -175,7 +188,59 @@ export function chapterEntries(tracks) {
       });
     });
   });
+  stripSharedPrefix(out);
+  markHeadings(out);
   return out;
+}
+
+// "Middlemarch (Unabridged): Chapter 2", on every one of 362 markers: the part
+// every title shares, up to a separator, is the book's name and says nothing.
+// Only ever cut at a ": " or " - ", so "Chapter 1" and "Chapter 2" keep their
+// shared "Chapter ".
+export function stripSharedPrefix(entries) {
+  const titles = entries.filter(e => e.marked).map(e => e.title);
+  if (titles.length < 2) return;
+  let prefix = titles[0];
+  for (const t of titles) {
+    let k = 0;
+    while (k < prefix.length && k < t.length && prefix[k] === t[k]) k++;
+    prefix = prefix.slice(0, k);
+    if (!prefix) return;
+  }
+  const colon = prefix.lastIndexOf(': ');
+  const dash = prefix.lastIndexOf(' - ');
+  const cut = Math.max(colon >= 0 ? colon + 2 : -1, dash >= 0 ? dash + 3 : -1);
+  if (cut <= 0 || titles.some(t => !t.slice(cut).trim())) return;
+  for (const e of entries) if (e.marked) e.title = e.title.slice(cut).trim();
+}
+
+// Markers that name a chapter, as opposed to the finer ones between them.
+// OverDrive files carry both: "Chapter 4", then a marker every few minutes
+// named after its first line ("'It is very painful,' said Dorothea...").
+const HEADING = /^(chapter|book|part|volume|prelude|prologue|epilogue|finale|introduction|preface|foreword|afterword|appendix|interlude|dedication|acknowledg|author'?s note|opening|closing|credits)\b/i;
+
+// A book whose markers are all headings by name, or none are, has every marker
+// as a chapter -- "Chapter 1" to "Chapter 69", or markers named by numbers
+// alone. Only a book that mixes the two has sections.
+export function markHeadings(entries) {
+  const marked = entries.filter(e => e.marked);
+  const named = marked.filter(e => HEADING.test(e.title)).length;
+  const mixed = named >= 2 && named < marked.length;
+  for (const e of entries) e.heading = !e.marked || !mixed || HEADING.test(e.title);
+}
+
+// The chapter a part belongs to: the nearest heading at or before it, or -1
+// before the first one.
+export function headingOf(entries, i) {
+  for (let k = Math.min(i, entries.length - 1); k >= 0; k--) if (entries[k].heading) return k;
+  return -1;
+}
+
+// What fits in the bar: the "Chapter N" of "Book 1: Miss Brooke - Chapter 1",
+// or the title as it stands.
+export function shortTitle(title) {
+  const m = [...title.matchAll(/\bchapter\s+[\w.-]+/gi)].pop();
+  return m ? `Chapter ${m[0].replace(/^chapter\s+/i, '')}` : title;
 }
 
 // Which part a position in a given track falls in. A quarter of a second of
@@ -360,15 +425,29 @@ function gotoEntry(i, { autoplay = !audio.paused } = {}) {
   render();
 }
 
-// Back goes to the start of the part playing first, and only to the one
-// before when already at its start -- the way every player's back button
-// works, and the way a reader who missed the opening line means it.
+// Previous and Next move by chapter. The sections between chapters are in the
+// list to be tapped, but stepping through them five minutes at a time is not
+// what "next chapter" means. Back goes to the start of the chapter playing
+// first, and only to the one before from there -- the way every player's back
+// button works.
 function stepEntry(delta) {
-  const i = entryAt(state.entries, state.index, audio.currentTime || 0);
-  const e = state.entries[i];
-  let target = i + delta;
-  if (delta < 0 && e && e.track === state.index && (audio.currentTime || 0) - e.start > 3) target = i;
-  if (target < 0 || target >= state.entries.length) return;
+  const now = entryAt(state.entries, state.index, audio.currentTime || 0);
+  const here = headingOf(state.entries, now);
+  const headings = state.entries.map((e, i) => (e.heading ? i : -1)).filter(i => i >= 0);
+  if (here < 0) {                       // before the first chapter
+    gotoEntry(delta < 0 ? 0 : headings[0]);
+    return;
+  }
+  const k = headings.indexOf(here);
+  let target;
+  if (delta < 0) {
+    const h = state.entries[here];
+    const secondsIn = h.track === state.index ? (audio.currentTime || 0) - h.start : Infinity;
+    target = secondsIn > 3 ? here : headings[k - 1];
+  } else {
+    target = headings[k + 1];
+  }
+  if (target === undefined) return;
   gotoEntry(target);
 }
 
@@ -427,7 +506,8 @@ function updateMediaSession() {
     return;
   }
   const many = state.entries.length > 1;
-  const entry = state.entries[Math.max(0, state.entry)];
+  const at = Math.max(0, state.entry);
+  const entry = state.entries[Math.max(0, headingOf(state.entries, at))] || state.entries[at];
   try {
     media.metadata = new MediaMetadata({
       title: many && entry ? entry.title : state.book.title,
@@ -512,8 +592,19 @@ function render() {
   label.hidden = n < 2;
   if (n >= 2) {
     const marked = state.entries[i]?.marked;
-    label.textContent = marked ? `Ch ${i + 1}/${n}` : `${i + 1}/${n}`;
-    label.title = marked ? `${state.entries[i].title} -- show the chapters` : 'Show the files';
+    if (marked) {
+      // The chapter's name, so the bar says where in the book you are -- the
+      // thing a reader following along in the text wants to know.
+      const h = headingOf(state.entries, i);
+      const chapter = state.entries[h >= 0 ? h : i];
+      const all = state.entries.filter(e => e.heading).length;
+      const number = state.entries.slice(0, (h >= 0 ? h : i) + 1).filter(e => e.heading).length;
+      label.textContent = shortTitle(chapter.title);
+      label.title = `${chapter.title} (${number} of ${all}) -- show the chapters`;
+    } else {
+      label.textContent = `${i + 1}/${n}`;
+      label.title = 'Show the files';
+    }
   }
 }
 
@@ -538,9 +629,10 @@ function renderTracks() {
 
   const bytes = state.tracks.reduce((n, t) => n + (t.size || 0), 0);
   const files = state.tracks.length;
-  const chapters = state.entries.filter(e => e.marked).length;
+  const chapters = state.entries.filter(e => e.marked && e.heading).length;
+  const sections = state.entries.filter(e => e.marked && !e.heading).length;
   const parts = chapters
-    ? `${chapters} chapters`
+    ? `${chapters} chapters${sections ? `, ${sections} sections` : ''}`
     : `${files} file${files === 1 ? '' : 's'}`;
   summary.textContent = `${parts} · ${formatLength(state.total)} · ${mb(bytes)} stored on this device`;
 
@@ -550,7 +642,10 @@ function renderTracks() {
 
   state.entries.forEach((e, i) => {
     const b = document.createElement('button');
-    b.className = 'audio-track' + (i === current ? ' is-current' : '');
+    b.className = 'audio-track'
+      + (sections && e.heading ? ' is-heading' : '')
+      + (sections && !e.heading ? ' is-section' : '')
+      + (i === current ? ' is-current' : '');
     const name = document.createElement('span');
     name.textContent = e.title;
     const len = document.createElement('span');
@@ -610,7 +705,7 @@ async function attach(fileList) {
   render();
   state.hooks.onAudioChanged?.();
 
-  const chapterCount = state.entries.filter(e => e.marked).length;
+  const chapterCount = state.entries.filter(e => e.marked && e.heading).length;
   const length = formatLength(state.total) + (chapterCount ? `, ${chapterCount} chapters` : '');
   const extra = ignored ? ` (${ignored} other file${ignored === 1 ? '' : 's'}, like covers, left out.)` : '';
   say(refused.length
@@ -626,12 +721,15 @@ function useTracks(tracks, position) {
   state.entries = chapterEntries(tracks);
   state.entry = -1;
 
-  // An M4B added before chapters were read has none recorded. They are read
-  // now, each time it opens -- a few dozen milliseconds, and cheaper than
+  // A track stored before this chapter reading had its chapters read now,
+  // each time its book opens -- a few dozen milliseconds, and cheaper than
   // rewriting a record that holds hundreds of megabytes of audio.
-  const unread = tracks.filter(t => t.type === 'audio/mp4' && t.chapters === undefined);
+  const unread = tracks.filter(t => (t.chaptersRead || 0) < CHAPTER_READING && CHAPTER_READERS[t.type]);
   if (unread.length) {
-    Promise.all(unread.map(async (t) => { t.chapters = await readChapters(t.blob); })).then(() => {
+    Promise.all(unread.map(async (t) => {
+      t.chapters = await readChaptersOf(t);
+      t.chaptersRead = CHAPTER_READING;
+    })).then(() => {
       if (state.tracks !== tracks) return;
       state.entries = chapterEntries(tracks);
       state.entry = -1;

@@ -236,8 +236,10 @@ function neroChapters(view, root) {
 }
 
 // In time order, near-duplicates merged, a blank title given a number. Fewer
-// than two chapters is no chapters: one marker at 0:00 tells nobody anything.
-export function tidyChapters(list) {
+// than two chapters is no chapters by default: one marker at 0:00 on a whole
+// book tells nobody anything. (One file of a folder is different; see
+// mp3-chapters.js, which asks for a minimum of one.)
+export function tidyChapters(list, { min = 2 } = {}) {
   if (!list?.length) return null;
   const sorted = list
     .filter(c => Number.isFinite(c.start) && c.start >= 0)
@@ -247,7 +249,7 @@ export function tidyChapters(list) {
     if (out.length && c.start - out[out.length - 1].start < 0.5) continue;
     out.push({ title: c.title || `Chapter ${out.length + 1}`, start: c.start });
   }
-  return out.length >= 2 ? out : null;
+  return out.length >= min ? out : null;
 }
 
 // Both readings, for checking one against the other.

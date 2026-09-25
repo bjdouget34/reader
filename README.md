@@ -93,7 +93,20 @@ library. The `node_modules` directory here exists solely to re-vendor pdf.js
   index (8 MB of a 374 MB book) and each title's few bytes, never the audio.
   The sample M4B carries both, and they agree on all 69 titles and every start
   to the millisecond. An M4B added before chapters were read gets them when
-  its book opens. MP3 chapter tags (ID3 CHAP) are not read.
+  its book opens.
+
+  **MP3 chapters are read too**, by `js/mp3-chapters.js`, from the ID3 tag at
+  the front of each file: the standard CHAP frames, and OverDrive's
+  "MediaMarkers" -- what library audiobooks (Libby / OverDrive) carry, and what
+  the sample Middlemarch has. OverDrive marks chapters AND sections every few
+  minutes, named after their first line, so a book that mixes the two shows
+  chapters in bold with their sections beneath; Previous / Next and the bar step
+  and name by chapter. A title prefix every marker shares ("Middlemarch
+  (Unabridged): ") is dropped. On the sample: 362 markers across 28 files,
+  matching an independent count exactly, sorting into 88 chapters -- the
+  novel's Prelude, 86 chapters and Finale -- and 274 sections, with a file that
+  opens mid-chapter placed in the chapter before. An MP3 audiobook added under
+  v20 or earlier gets its chapters read when its book opens.
 - **Speed read**, for EPUB and PDF. One word at a time in a fixed spot
   (rapid serial visual presentation), starting from the first word on the page
   you were on. Each word is centred on a highlighted letter a little left of its
@@ -180,6 +193,7 @@ If registration fails, the console message says why.
 | `lib/` | Vendored epub.js, JSZip, pdf.js. Committed on purpose |
 | `js/audio-player.js` | The audiobook player: storage, playback, the bar, the lock screen |
 | `js/mp4-chapters.js` | Chapter markers out of an M4B / M4A |
+| `js/mp3-chapters.js` | Chapter markers out of an MP3's ID3 tag, CHAP and OverDrive |
 | `js/speed-read.js` | Speed reading: the screen, the timing and the controls |
 | `js/turn-animation.js` | Page-turn motion, shared by both engines |
 | `lib/pdf-textlayer.css` | Text layer rules copied from pdf.js. Do not hand-edit |
