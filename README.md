@@ -83,8 +83,17 @@ library. The `node_modules` directory here exists solely to re-vendor pdf.js
   Apple copy-protected ones. Audiobooks live in their own IndexedDB store so
   listing the library never reads them; the listening position is kept in
   localStorage so saving it every few seconds does not rewrite the book's file.
-  Not yet: chapter markers inside an M4B -- a single long file shows as one
-  track, and is navigated by the position bar and the 30-second buttons.
+  **Chapters in an M4B or M4A are read** when it is added, and the book is then
+  navigated by them: the bar shows "Ch 12/69" and opens the chapter list, the
+  list starts scrolled to the chapter playing and has Previous and Next, and
+  the lock screen's and headphones' previous / next step by chapter. A folder
+  of plain MP3s works exactly as before, one part per file. Both ways MP4 files
+  record chapters are read -- Apple's chapter track and Nero's `chpl` list,
+  Apple's preferred -- by `js/mp4-chapters.js`, which reads only the file's
+  index (8 MB of a 374 MB book) and each title's few bytes, never the audio.
+  The sample M4B carries both, and they agree on all 69 titles and every start
+  to the millisecond. An M4B added before chapters were read gets them when
+  its book opens. MP3 chapter tags (ID3 CHAP) are not read.
 - **Speed read**, for EPUB and PDF. One word at a time in a fixed spot
   (rapid serial visual presentation), starting from the first word on the page
   you were on. Each word is centred on a highlighted letter a little left of its
@@ -170,6 +179,7 @@ If registration fails, the console message says why.
 | `tools/make-icons.js` | Regenerates the app icons |
 | `lib/` | Vendored epub.js, JSZip, pdf.js. Committed on purpose |
 | `js/audio-player.js` | The audiobook player: storage, playback, the bar, the lock screen |
+| `js/mp4-chapters.js` | Chapter markers out of an M4B / M4A |
 | `js/speed-read.js` | Speed reading: the screen, the timing and the controls |
 | `js/turn-animation.js` | Page-turn motion, shared by both engines |
 | `lib/pdf-textlayer.css` | Text layer rules copied from pdf.js. Do not hand-edit |

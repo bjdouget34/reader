@@ -17,6 +17,7 @@
 
 import { audioDb, keepStorage } from './db.js';
 import { loadSettings, saveSettings } from './settings.js';
+import { readChapters } from './mp4-chapters.js';
 
 const $ = (sel) => document.querySelector(sel);
 
@@ -108,7 +109,10 @@ export async function prepareTracks(fileList) {
     const blob = new Blob([file], { type });
     const { ok, duration } = await probe(blob);
     if (!ok) { refused.push({ name: file.name, short: UNREADABLE[0], long: UNREADABLE[1], many: UNREADABLE[2], named: false }); continue; }
-    tracks.push({ name: trackName(file.name), file: file.name, type, size: file.size, duration, blob });
+    // Only an MP4 carries chapter markers in a form read here. null means the
+    // file was looked at and has none, as distinct from never looked at.
+    const chapters = type === 'audio/mp4' ? await readChapters(blob) : null;
+    tracks.push({ name: trackName(file.name), file: file.name, type, size: file.size, duration, chapters, blob });
   }
   // A reason that says what to do goes first: "convert it" is more use than
   // "could not be played".
@@ -150,6 +154,40 @@ export function locate(offsets, tracks, t) {
   let i = 0;
   while (i + 1 < offsets.length && offsets[i + 1] <= t) i++;
   return { index: i, time: Math.max(0, Math.min(t - offsets[i], tracks[i].duration)) };
+}
+
+// The book's parts, in order: a chapter where the file has markers, the file
+// itself where it has none. So a folder of plain MP3s is one part per file,
+// exactly as before chapters were read; a single M4B is its chapters; and a
+// folder of M4Bs is each file's chapters in turn.
+export function chapterEntries(tracks) {
+  const out = [];
+  tracks.forEach((t, track) => {
+    const marks = Array.isArray(t.chapters) && t.chapters.length ? t.chapters : null;
+    const list = marks
+      ? marks.filter(c => !Number.isFinite(t.duration) || c.start < t.duration)
+      : [{ title: t.name, start: 0 }];
+    list.forEach((c, k) => {
+      const end = list[k + 1] ? list[k + 1].start : t.duration;
+      out.push({
+        track, start: c.start, title: c.title, marked: !!marks,
+        length: Number.isFinite(end) ? end - c.start : null,
+      });
+    });
+  });
+  return out;
+}
+
+// Which part a position in a given track falls in. A quarter of a second of
+// slack, so landing exactly on a chapter's start counts as being in it.
+export function entryAt(entries, track, time) {
+  let found = 0;
+  for (let i = 0; i < entries.length; i++) {
+    const e = entries[i];
+    if (e.track < track || (e.track === track && e.start <= time + 0.25)) found = i;
+    else break;
+  }
+  return found;
 }
 
 export function formatTime(seconds) {
@@ -212,6 +250,8 @@ const state = {
   pendingSeek: null,
   lastSave: 0,
   scrubbing: false,
+  entries: [],       // chapterEntries(tracks)
+  entry: -1,         // which of them is playing
   hooks: {},
 };
 
@@ -307,11 +347,29 @@ function skip(seconds) {
   remember(true);
 }
 
-function stepTrack(delta) {
-  const next = state.index + delta;
-  if (next < 0 || next >= state.tracks.length) return;
-  loadTrack(next, 0, { autoplay: !audio.paused });
+function gotoEntry(i, { autoplay = !audio.paused } = {}) {
+  const e = state.entries[i];
+  if (!e) return;
+  if (e.track !== state.index) {
+    loadTrack(e.track, e.start, { autoplay });
+  } else {
+    audio.currentTime = e.start;
+    if (autoplay && audio.paused) play();
+  }
   remember(true);
+  render();
+}
+
+// Back goes to the start of the part playing first, and only to the one
+// before when already at its start -- the way every player's back button
+// works, and the way a reader who missed the opening line means it.
+function stepEntry(delta) {
+  const i = entryAt(state.entries, state.index, audio.currentTime || 0);
+  const e = state.entries[i];
+  let target = i + delta;
+  if (delta < 0 && e && e.track === state.index && (audio.currentTime || 0) - e.start > 3) target = i;
+  if (target < 0 || target >= state.entries.length) return;
+  gotoEntry(target);
 }
 
 audio.addEventListener('loadedmetadata', () => {
@@ -368,10 +426,11 @@ function updateMediaSession() {
     for (const a of ['play', 'pause', 'seekbackward', 'seekforward', 'seekto', 'previoustrack', 'nexttrack']) setAction(a, null);
     return;
   }
-  const many = state.tracks.length > 1;
+  const many = state.entries.length > 1;
+  const entry = state.entries[Math.max(0, state.entry)];
   try {
     media.metadata = new MediaMetadata({
-      title: many ? state.tracks[state.index].name : state.book.title,
+      title: many && entry ? entry.title : state.book.title,
       artist: state.book.author || '',
       album: state.book.title,
       artwork: state.coverUrl ? [{ src: state.coverUrl, sizes: '400x600', type: state.book.cover?.type || 'image/jpeg' }] : [],
@@ -387,8 +446,10 @@ function updateMediaSession() {
     audio.currentTime = d.seekTime;
     remember(true);
   });
-  setAction('previoustrack', many ? () => stepTrack(-1) : null);
-  setAction('nexttrack', many ? () => stepTrack(1) : null);
+  // The lock screen's and the headphones' previous / next: by chapter where
+  // there are chapters, by file where there are files.
+  setAction('previoustrack', many ? () => stepEntry(-1) : null);
+  setAction('nexttrack', many ? () => stepEntry(1) : null);
 }
 
 function updatePositionState() {
@@ -438,10 +499,22 @@ function render() {
   $('#audio-seek').disabled = !total;
   $('#audio-rate').value = String(rate());
 
-  const many = state.tracks.length > 1;
-  const trackEl = $('#audio-track');
-  trackEl.hidden = !many;
-  if (many) trackEl.textContent = `${state.index + 1}/${state.tracks.length}`;
+  // Crossing into a new part updates the list's marker and the lock screen's
+  // title; nothing else here needs to know.
+  const i = entryAt(state.entries, state.index, audio.currentTime || 0);
+  if (i !== state.entry) {
+    state.entry = i;
+    renderTracks();
+    updateMediaSession();
+  }
+  const n = state.entries.length;
+  const label = $('#audio-track');
+  label.hidden = n < 2;
+  if (n >= 2) {
+    const marked = state.entries[i]?.marked;
+    label.textContent = marked ? `Ch ${i + 1}/${n}` : `${i + 1}/${n}`;
+    label.title = marked ? `${state.entries[i].title} -- show the chapters` : 'Show the files';
+  }
 }
 
 // The small 🎧 beside the toolbar's own ⌄, for when both the toolbar and the
@@ -465,22 +538,35 @@ function renderTracks() {
 
   const bytes = state.tracks.reduce((n, t) => n + (t.size || 0), 0);
   const files = state.tracks.length;
-  summary.textContent = `${files} file${files === 1 ? '' : 's'} · ${formatLength(state.total)} · ${mb(bytes)} stored on this device`;
+  const chapters = state.entries.filter(e => e.marked).length;
+  const parts = chapters
+    ? `${chapters} chapters`
+    : `${files} file${files === 1 ? '' : 's'}`;
+  summary.textContent = `${parts} · ${formatLength(state.total)} · ${mb(bytes)} stored on this device`;
 
-  state.tracks.forEach((t, i) => {
+  const current = Math.max(0, state.entry);
+  $('#audio-prev-ch').disabled = state.entries.length < 2;
+  $('#audio-next-ch').disabled = state.entries.length < 2 || current >= state.entries.length - 1;
+
+  state.entries.forEach((e, i) => {
     const b = document.createElement('button');
-    b.className = 'audio-track' + (i === state.index ? ' is-current' : '');
+    b.className = 'audio-track' + (i === current ? ' is-current' : '');
     const name = document.createElement('span');
-    name.textContent = t.name;
+    name.textContent = e.title;
     const len = document.createElement('span');
     len.className = 'audio-track-len';
-    len.textContent = formatTime(t.duration);
+    len.textContent = formatTime(e.length);
     b.append(name, len);
-    b.addEventListener('click', () => {
-      loadTrack(i, 0, { autoplay: true });
-      remember(true);
-    });
+    b.addEventListener('click', () => gotoEntry(i, { autoplay: true }));
     list.append(b);
+  });
+}
+
+// Opening the list puts the part playing in view, rather than leaving someone
+// in chapter 50 scrolling down from chapter 1.
+function revealCurrent() {
+  requestAnimationFrame(() => {
+    $('#audio-tracks .is-current')?.scrollIntoView({ block: 'center' });
   });
 }
 
@@ -524,7 +610,8 @@ async function attach(fileList) {
   render();
   state.hooks.onAudioChanged?.();
 
-  const length = formatLength(state.total);
+  const chapterCount = state.entries.filter(e => e.marked).length;
+  const length = formatLength(state.total) + (chapterCount ? `, ${chapterCount} chapters` : '');
   const extra = ignored ? ` (${ignored} other file${ignored === 1 ? '' : 's'}, like covers, left out.)` : '';
   say(refused.length
     ? `Added ${tracks.length} file${tracks.length === 1 ? '' : 's'} (${length}). Skipped ${refused.length}: ${describeRefused(refused)}`
@@ -536,6 +623,22 @@ function useTracks(tracks, position) {
   const { offsets, total } = timeline(tracks);
   state.offsets = offsets;
   state.total = total;
+  state.entries = chapterEntries(tracks);
+  state.entry = -1;
+
+  // An M4B added before chapters were read has none recorded. They are read
+  // now, each time it opens -- a few dozen milliseconds, and cheaper than
+  // rewriting a record that holds hundreds of megabytes of audio.
+  const unread = tracks.filter(t => t.type === 'audio/mp4' && t.chapters === undefined);
+  if (unread.length) {
+    Promise.all(unread.map(async (t) => { t.chapters = await readChapters(t.blob); })).then(() => {
+      if (state.tracks !== tracks) return;
+      state.entries = chapterEntries(tracks);
+      state.entry = -1;
+      render();
+    });
+  }
+
   const start = position && position.track < tracks.length ? position : { track: 0, time: 0 };
   loadTrack(start.track, start.time);
 }
@@ -551,6 +654,8 @@ function teardown() {
   state.total = null;
   state.index = 0;
   state.pendingSeek = null;
+  state.entries = [];
+  state.entry = -1;
 }
 
 // Called when a book opens. Loads its audiobook if it has one, ready at the
@@ -606,6 +711,11 @@ export function wireAudioControls() {
   $('#audio-hide').addEventListener('click', () => setBarShown(false));
 
   $('#audio-play').addEventListener('click', () => (audio.paused ? play() : pause()));
+  $('#audio-prev-ch').addEventListener('click', () => stepEntry(-1));
+  $('#audio-next-ch').addEventListener('click', () => stepEntry(1));
+  // app.js opens the list from both of these; this puts the current part in view.
+  $('#audio-more').addEventListener('click', revealCurrent);
+  $('#audio-track').addEventListener('click', revealCurrent);
   $('#audio-back').addEventListener('click', () => skip(-SKIP_S));
   $('#audio-fwd').addEventListener('click', () => skip(SKIP_S));
 

@@ -484,6 +484,13 @@ body[data-chrome="hidden"] .audio-bar {
 }
 
 .audio-summary { margin: 0; padding: 10px 14px; font-size: 13px; color: var(--muted); }
+.audio-steps { display: flex; gap: 8px; padding: 0 14px 10px; }
+.audio-steps button { flex: 1; }
+/* The chapter readout in the bar is also the way into the chapter list. */
+.audio-bar .audio-chapter {
+  padding: 6px 7px; font-size: 12px; color: var(--muted);
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
 .audio-track {
   display: flex; justify-content: space-between; gap: 12px; width: 100%;
   text-align: left; border: none; border-bottom: 1px solid var(--line); border-radius: 0;

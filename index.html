@@ -86,7 +86,7 @@
     <span id="audio-time" class="audio-time">0:00</span>
     <input id="audio-seek" type="range" min="0" max="1000" step="1" value="0" aria-label="Position in the audiobook">
     <span id="audio-left" class="audio-time"></span>
-    <span id="audio-track" class="audio-time" hidden></span>
+    <button id="audio-track" class="audio-chapter" hidden title="Chapters" aria-label="Chapters"></button>
     <select id="audio-rate" class="picker audio-rate" aria-label="Playback speed" title="Playback speed"></select>
     <button id="audio-more" title="Tracks, replace or remove" aria-label="Audiobook tracks and options">⋯</button>
   </div>
@@ -139,6 +139,10 @@
         <button data-close="audio" aria-label="Close audiobook panel">×</button>
       </div>
       <p id="audio-summary" class="audio-summary"></p>
+      <div class="audio-steps">
+        <button id="audio-prev-ch" title="Back to the start of this part, or the one before">‹ Previous</button>
+        <button id="audio-next-ch" title="The next part">Next ›</button>
+      </div>
       <div id="audio-tracks" class="drawer-body"></div>
       <div class="audio-actions">
         <button id="audio-replace">Replace audiobook…</button>

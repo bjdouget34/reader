@@ -708,6 +708,7 @@ $('#theme').addEventListener('change', (e) => {
 
 $('#chrome-hide').addEventListener('click', () => setChromeHidden(true));
 $('#audio-more').addEventListener('click', () => toggleDrawer('audio'));
+$('#audio-track').addEventListener('click', () => toggleDrawer('audio'));
 wireAudioControls();
 $('#chrome-show').addEventListener('click', () => setChromeHidden(false));
 
