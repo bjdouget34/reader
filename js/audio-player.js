@@ -34,8 +34,9 @@ const $ = (sel) => document.querySelector(sel);
 
 // What the file picker offers. Broad on purpose: whether a file actually plays
 // is decided by trying it (see probe), not by its name.
-// .wma is named because an iPhone's picker may not count it as audio/*, and
-// it can be converted (see wma-convert.js).
+// .wma is named because a picker may not count it as audio/*, and it can be
+// converted (see wma-convert.js). An iPhone ignores the name either way and
+// gets no filter at all; see wireAudioControls.
 export const AUDIO_ACCEPT = 'audio/*,.mp3,.m4a,.m4b,.aac,.ogg,.oga,.opus,.wav,.flac,.webm,.wma';
 
 const SKIP_S = 30;
@@ -72,6 +73,13 @@ const TYPES = {
 function typeFor(file) {
   const ext = (/\.([^.]+)$/.exec(file.name)?.[1] || '').toLowerCase();
   return TYPES[ext] || file.type || 'application/octet-stream';
+}
+
+// An iPhone, or an iPad -- which since iPadOS 13 reports itself as a Mac, and
+// gives itself away only by having a touch screen.
+export function isAppleTouch(nav = navigator) {
+  return /iPad|iPhone|iPod/.test(nav.userAgent || '')
+    || (nav.platform === 'MacIntel' && nav.maxTouchPoints > 1);
 }
 
 // Natural order, so "Chapter 2" plays before "Chapter 10".
@@ -820,7 +828,13 @@ export function closeAudio() {
 
 export function wireAudioControls() {
   const picker = $('#audio-file');
-  picker.accept = AUDIO_ACCEPT;
+  // An iPhone's picker matches the filter against the file types iOS knows,
+  // and it knows no type for .wma -- so under any filter at all, WMA files
+  // are greyed out and cannot be tapped, ".wma" listed or not. So there it
+  // gets no filter: everything is pickable, and what is not audio is passed
+  // over after picking, as a folder's cover and readme already are.
+  if (isAppleTouch()) picker.removeAttribute('accept');
+  else picker.accept = AUDIO_ACCEPT;
   picker.addEventListener('change', async () => {
     const files = [...picker.files];
     picker.value = '';
