@@ -79,8 +79,12 @@ library. The `node_modules` directory here exists solely to re-vendor pdf.js
   one book; covers and playlists in the folder are passed over. Whether a file
   plays is decided by letting the browser read its header, not by its name.
   MP3, M4A, M4B, AAC, OGG, WAV and FLAC play; WMA does not play in any browser
-  and is refused with a note to convert it (VLC can), as are Audible files and
-  Apple copy-protected ones. Audiobooks live in their own IndexedDB store so
+  and is refused with a note to convert it, as are Audible files and
+  Apple copy-protected ones. `tools/convert-wma.ps1` does the converting with
+  VLC (`pwsh -File tools\convert-wma.ps1 "<folder>"`): MP3s at 96 kbps into a
+  new `<folder> (MP3)` beside the original, which is left alone; DRM-protected
+  WMAs are named and skipped; each result is checked against the source's
+  length. It runs at about real time -- a two-hour book takes two minutes. Audiobooks live in their own IndexedDB store so
   listing the library never reads them; the listening position is kept in
   localStorage so saving it every few seconds does not rewrite the book's file.
   **Chapters in an M4B or M4A are read** when it is added, and the book is then
@@ -190,6 +194,7 @@ If registration fails, the console message says why.
 | `sw.js` | Offline cache |
 | `serve.js` | The local server |
 | `tools/make-icons.js` | Regenerates the app icons |
+| `tools/convert-wma.ps1` | Converts WMA audiobooks to MP3 with VLC, since no browser plays WMA |
 | `lib/` | Vendored epub.js, JSZip, pdf.js. Committed on purpose |
 | `js/audio-player.js` | The audiobook player: storage, playback, the bar, the lock screen |
 | `js/mp4-chapters.js` | Chapter markers out of an M4B / M4A |
