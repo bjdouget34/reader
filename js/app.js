@@ -672,28 +672,34 @@ $('#epub-make').addEventListener('click', async () => {
   if (!record || record.format !== 'pdf') return;
   const button = $('#epub-make');
   button.disabled = true;
+  let saving = 'loading the converter';   // this side's steps, for the message
   try {
     const { convertPdfToEpub } = await import('./pdf-to-epub.js');
+    saving = 'looking for an earlier copy';
     // One copy per PDF: making it again replaces the one made before, rather
     // than leaving two books of the same name that differ only in when.
     const earlier = (await db.all()).find(b => b.madeFrom === record.id) || null;
+    saving = null;   // the converter names its own steps
     const result = await convertPdfToEpub(record, { replacing: !!earlier });
     if (result.cancelled) { status('Cancelled. Nothing was added.'); return; }
+    saving = 'saving the EPUB';
     const file = result.bytes.slice().buffer;
     const id = await fingerprint(file);
     if (!(await db.get(id))) {
       await db.put({
         id, format: 'epub', file,
-        title: record.title, author: record.author, cover: record.cover || null,
+        title: record.title, author: record.author, cover: result.cover || null,
         added: Date.now(), lastRead: null,
         position: null, percent: 0, locations: null,
         highlights: [], madeFrom: record.id,
       });
     }
+    saving = 'removing the earlier copy';
     if (earlier && earlier.id !== id) {
       await db.remove(earlier.id);
       try { await removeAudioFor(earlier.id); } catch { /* it had none */ }
     }
+    saving = 'showing the result';
     const s = result.summary;
     const parts = [
       `${s.chapters || 'No'} chapter${s.chapters === 1 ? '' : 's'} found`,
@@ -715,8 +721,9 @@ $('#epub-make').addEventListener('click', async () => {
     // The error itself goes on the end: on a phone there is no console to
     // look in, and "could not be made" alone says nothing about why.
     const why = String(err?.message || err || '').slice(0, 160);
+    const where = err?.stage || saving;
     status(err?.name === 'ConvertError' ? err.message
-      : `The EPUB could not be made from this PDF.${why ? ` (${err?.name || 'Error'}: ${why})` : ''}`);
+      : `The EPUB could not be made from this PDF.${why ? ` (${where ? `while ${where}, ` : ''}${err?.name || 'Error'}: ${why})` : ''}`);
   } finally {
     button.disabled = false;
   }

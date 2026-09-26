@@ -51,6 +51,9 @@ export async function convertPdfToEpub(record, { replacing = false } = {}) {
     text: 'Keep the app open until this finishes. The PDF stays as it is.',
     onCancel: () => { cancelled = true; },
   });
+  // Which step is running, so a failure can say where it happened: on a
+  // phone there is no console, only the message.
+  let stage = 'opening the PDF';
   dialog.status('Opening the PDF…');
   const task = loadDocument(record.file);
   try {
@@ -63,6 +66,7 @@ export async function convertPdfToEpub(record, { replacing = false } = {}) {
       dialog.status(left ? `${line} · ${left}` : line, fraction);
     };
 
+    stage = 'reading the text';
     const pages = [];
     for (let n = 1; n <= total; n++) {
       if (cancelled) return { cancelled: true };
@@ -72,6 +76,7 @@ export async function convertPdfToEpub(record, { replacing = false } = {}) {
       show(`Reading page ${n} of ${total}`, (READ_SHARE * n) / total);
     }
 
+    stage = 'working out the layout';
     const plan = planDocument(pages);
     const words = plan.blocks.reduce((n, b) => n + (b.text ? b.text.split(/\s+/).length : 0), 0);
     if (words < 50) {
@@ -79,6 +84,7 @@ export async function convertPdfToEpub(record, { replacing = false } = {}) {
         + 'which are pictures of text. An EPUB of it would be the same pictures, so none was made.');
     }
 
+    stage = 'drawing the pictures';
     const images = await drawPictures(doc, plan.figures, {
       cancelled: () => cancelled,
       step: (done, count) => show(`Pictures ${done} of ${count}`, READ_SHARE + (PICTURE_SHARE * done) / count),
@@ -87,8 +93,18 @@ export async function convertPdfToEpub(record, { replacing = false } = {}) {
     // A picture that could not be drawn is left out rather than shown broken.
     plan.blocks = plan.blocks.filter(b => b.type !== 'figure' || images.has(b.id));
 
+    // The cover is drawn afresh from page 1 -- which is where the PDF's own
+    // library cover came from -- rather than read back out of storage. On an
+    // iPhone a picture stored in the app's database can come back unreadable
+    // ("NotFoundError: The object can not be found here"), and a cover is not
+    // worth failing the whole book over.
+    stage = 'drawing the cover';
+    let coverBlob = null;
+    try { coverBlob = await drawCover(doc); } catch (err) { console.warn('[pdf-to-epub] no cover', err); }
+    const cover = coverBlob ? new Uint8Array(await coverBlob.arrayBuffer()) : null;
+
+    stage = 'putting the EPUB together';
     dialog.status('Putting the EPUB together…', READ_SHARE + PICTURE_SHARE);
-    const cover = record.cover ? new Uint8Array(await record.cover.arrayBuffer()) : null;
     const bytes = await buildEpub(globalThis.JSZip, {
       plan, title: record.title, author: record.author, images, cover,
       sourceName: `${record.title} (PDF)`,
@@ -97,10 +113,35 @@ export async function convertPdfToEpub(record, { replacing = false } = {}) {
     const chapters = plan.blocks.filter(b => b.type === 'h' && b.level === 2).length;
     const wholePages = plan.figures.filter(f => f.whole && images.has(f.id)).length;
     const pictures = images.size - wholePages;
-    return { bytes, summary: { pages: total, chapters, pictures, wholePages } };
+    return { bytes, cover: coverBlob, summary: { pages: total, chapters, pictures, wholePages } };
+  } catch (err) {
+    if (err && typeof err === 'object' && !err.stage) {
+      try { err.stage = stage; } catch { /* a frozen error keeps its message */ }
+    }
+    throw err;
   } finally {
     dialog.close();
     task.destroy().catch(() => {});
+  }
+}
+
+// Page 1, small, as a JPEG: the cover in the EPUB and in the library.
+async function drawCover(doc) {
+  const page = await doc.getPage(1);
+  const canvas = document.createElement('canvas');
+  try {
+    const base = page.getViewport({ scale: 1 });
+    const viewport = page.getViewport({ scale: 600 / base.width });
+    canvas.width = Math.ceil(viewport.width);
+    canvas.height = Math.ceil(viewport.height);
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    await page.render({ canvasContext: ctx, viewport }).promise;
+    return await new Promise(res => canvas.toBlob(res, 'image/jpeg', 0.85));
+  } finally {
+    canvas.width = canvas.height = 0;
+    page.cleanup();
   }
 }
 
