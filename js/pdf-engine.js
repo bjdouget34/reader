@@ -15,6 +15,27 @@ import { loadSettings, saveSettings } from './settings.js';
 
 pdfjs.GlobalWorkerOptions.workerSrc = new URL('../lib/pdf.worker.min.mjs', import.meta.url).href;
 
+// pdf.js reads a page's text with `for await (... of stream)`, which needs a
+// ReadableStream to be async-iterable -- and Safari's is not, on any iPhone.
+// The page view reads its text another way, so a PDF displayed fine there
+// while search, speed read and Make EPUB all failed with "undefined is not a
+// function". This is the standard shape of that iteration: read until done,
+// and let go of the stream however the loop ends.
+if (typeof ReadableStream === 'function' && !ReadableStream.prototype[Symbol.asyncIterator]) {
+  ReadableStream.prototype[Symbol.asyncIterator] = async function* () {
+    const reader = this.getReader();
+    try {
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) return;
+        yield value;
+      }
+    } finally {
+      reader.releaseLock();
+    }
+  };
+}
+
 // Everything pdf.js might fetch is vendored in lib/, so a plane works.
 const RESOURCES = {
   cMapUrl: new URL('../lib/cmaps/', import.meta.url).href,
