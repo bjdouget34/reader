@@ -758,9 +758,32 @@ function mergeHeadings(blocks) {
 
 // -------------------------------------------------------------- the EPUB
 
-const XML_BAD = /[\u0000-\u0008\u000B\u000C\u000E-\u001F￾￿]|[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g;
-export const esc = (s) => String(s).replace(XML_BAD, '')
+const XML_SUSPECT = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\uD800-\uDFFF￾￿]/;
+export const esc = (s) => xmlSafe(String(s))
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+// What XML cannot hold: control characters, the two non-characters, and half
+// of a surrogate pair, which a damaged PDF font can hand over. One in a
+// chapter makes the whole file unreadable. Done by walking the string, not by
+// a regular expression, because telling a lone half from a pair needs a
+// lookbehind -- which Safari before iOS 16.4 cannot even parse, and a module
+// it cannot parse does not load at all.
+function xmlSafe(s) {
+  if (!XML_SUSPECT.test(s)) return s;
+  let out = '';
+  for (let i = 0; i < s.length; i++) {
+    const c = s.charCodeAt(i);
+    if (c >= 0xD800 && c <= 0xDBFF) {
+      const d = s.charCodeAt(i + 1);
+      if (d >= 0xDC00 && d <= 0xDFFF) { out += s[i] + s[i + 1]; i++; }
+      continue;
+    }
+    if (c >= 0xDC00 && c <= 0xDFFF) continue;
+    if ((c < 0x20 && c !== 0x09 && c !== 0x0A && c !== 0x0D) || c === 0xFFFE || c === 0xFFFF) continue;
+    out += s[i];
+  }
+  return out;
+}
 
 function runsHtml(runs) {
   let html = '';
@@ -842,10 +865,20 @@ figure img { max-width: 100%; height: auto; }
 figure.page img { width: 100%; }
 `;
 
+// A random version-4 UUID for the book's identifier. crypto.randomUUID would
+// do, and is missing from Safari before iOS 15.4; getRandomValues is not.
+function uuid() {
+  const b = globalThis.crypto.getRandomValues(new Uint8Array(16));
+  b[6] = (b[6] & 0x0f) | 0x40;
+  b[8] = (b[8] & 0x3f) | 0x80;
+  const h = [...b].map(x => x.toString(16).padStart(2, '0')).join('');
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
+}
+
 // The whole EPUB, as bytes. JSZip is passed in: the browser has it as a
 // global, a test has it from disk. images maps a figure's id to its JPEG.
 export async function buildEpub(JSZip, { plan, title, author, lang = 'en', images, cover = null, sourceName = '',
-  id = `urn:uuid:${globalThis.crypto.randomUUID()}` }) {
+  id = `urn:uuid:${uuid()}` }) {
   plan = { ...plan, id };
   const zip = new JSZip();
   zip.file('mimetype', 'application/epub+zip', { compression: 'STORE' });

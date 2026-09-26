@@ -178,7 +178,8 @@ function status(message) {
   el.textContent = message;
   el.hidden = false;
   clearTimeout(statusTimer);
-  statusTimer = setTimeout(() => { el.hidden = true; }, 5000);
+  // Long enough to read: a long message stays up longer.
+  statusTimer = setTimeout(() => { el.hidden = true; }, Math.max(5000, message.length * 60));
 }
 
 // ----------------------------------------------------------------- reading
@@ -711,7 +712,11 @@ $('#epub-make').addEventListener('click', async () => {
   } catch (err) {
     console.error(err);
     $('#convert').hidden = true;
-    status(err?.name === 'ConvertError' ? err.message : 'The EPUB could not be made from this PDF.');
+    // The error itself goes on the end: on a phone there is no console to
+    // look in, and "could not be made" alone says nothing about why.
+    const why = String(err?.message || err || '').slice(0, 160);
+    status(err?.name === 'ConvertError' ? err.message
+      : `The EPUB could not be made from this PDF.${why ? ` (${err?.name || 'Error'}: ${why})` : ''}`);
   } finally {
     button.disabled = false;
   }

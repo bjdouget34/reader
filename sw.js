@@ -10,7 +10,7 @@
 //
 // Bump CACHE when you change the file list, or the old cache lingers.
 
-const CACHE = 'my-reader-v24';
+const CACHE = 'my-reader-v25';
 
 const CORE = [
   './',
