@@ -1,4 +1,4 @@
-# Reader
+# Flex Reader
 
 A small ebook reader for EPUB and PDF that runs in a browser, stores books on
 the device, and remembers where you left off. Built to work with no connection.

@@ -1,6 +1,6 @@
 {
-  "name": "Reader",
-  "short_name": "Reader",
+  "name": "Flex Reader",
+  "short_name": "Flex Reader",
   "description": "A small offline ebook reader for epub and pdf.",
   "start_url": ".",
   "scope": ".",
